@@ -1,5 +1,6 @@
 inline void ALE3DRelevantCheck(const double *v){
     double vc = v[0] ;
+    
     if (m_eosvmin != double(0.)) {
         if (vc < m_eosvmin)
         vc = m_eosvmin ;

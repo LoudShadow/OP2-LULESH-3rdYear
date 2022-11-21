@@ -2206,8 +2206,8 @@ void EvalEOSForElems(double *vnewc,
    //loop to add load imbalance based on region number 
    for(int j = 0; j < rep; j++) {
       /* compress data, minimal set */
-#pragma omp parallel
-      {
+// #pragma omp parallel
+      // {
 
          op_par_loop(CopyEOSValsIntoArray, "CopyEOSValsIntoArray", elems,
                      op_arg_dat(p_e_old, -1, OP_ID, 1, "double", OP_WRITE), op_arg_dat(p_e, -1, OP_ID, 1, "double", OP_READ),
@@ -2246,7 +2246,7 @@ void EvalEOSForElems(double *vnewc,
          op_par_loop(CalcEOSWork, "CalcEOSWork", elems,
                      op_arg_dat(p_work, -1, OP_ID, 1 , "double", OP_WRITE));
 
-      }
+      // }
       CalcEnergyForElems(p_new, e_new, q_new, bvc, pbvc,
                          p_old, e_old,  q_old, compression, compHalfStep,
                          vnewc, work,  delvc, pmin,
