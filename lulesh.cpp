@@ -284,6 +284,20 @@ double  m_ssc_low = double(.3333333e-18);
 // Should maybe be moved to a header file to avoid clutter or to the main function to not be global
 // Element-centered
 
+
+static inline 
+void logVec(char *funcName, op_dat value){
+   std::cout << std::scientific << std::setprecision(6);
+
+   printf("%s\n",funcName);
+   printf("\n");
+   for (int i =0 ; i<64;i++){
+      std::cout << i << "     " << std::right << (double)((double *)value->data)[i] << "\n";
+   }
+   printf("\n");
+}
+
+
 // Region information
 int    m_numReg ;
 int    m_cost; //imbalance cost
@@ -1580,6 +1594,7 @@ void TimeIncrement()
 }
 
 
+
 static inline
 void InitStressTermsForElems()
 {
@@ -1591,6 +1606,7 @@ void InitStressTermsForElems()
                op_arg_dat(p_sigzz, -1, OP_ID, 1, "double", OP_WRITE),
                op_arg_dat(p_p, -1, OP_ID, 1, "double", OP_READ),
                op_arg_dat(p_q, -1, OP_ID, 1, "double", OP_READ));
+
    // MPI_Barrier(MPI_COMM_WORLD);
 }
 
@@ -1609,14 +1625,16 @@ void IntegrateStressForElems()
                op_arg_dat(p_x, 0, p_nodelist, 1, "double", OP_READ), op_arg_dat(p_x, 1, p_nodelist, 1, "double", OP_READ), op_arg_dat(p_x, 2, p_nodelist, 1, "double", OP_READ),op_arg_dat(p_x, 3, p_nodelist, 1, "double", OP_READ),op_arg_dat(p_x, 4, p_nodelist, 1, "double", OP_READ),op_arg_dat(p_x, 5, p_nodelist, 1, "double", OP_READ),op_arg_dat(p_x, 6, p_nodelist, 1, "double", OP_READ),op_arg_dat(p_x, 7, p_nodelist, 1, "double", OP_READ),
                op_arg_dat(p_y, 0, p_nodelist, 1, "double", OP_READ), op_arg_dat(p_y, 1, p_nodelist, 1, "double", OP_READ), op_arg_dat(p_y, 2, p_nodelist, 1, "double", OP_READ),op_arg_dat(p_y, 3, p_nodelist, 1, "double", OP_READ),op_arg_dat(p_y, 4, p_nodelist, 1, "double", OP_READ),op_arg_dat(p_y, 5, p_nodelist, 1, "double", OP_READ),op_arg_dat(p_y, 6, p_nodelist, 1, "double", OP_READ),op_arg_dat(p_y, 7, p_nodelist, 1, "double", OP_READ),
                op_arg_dat(p_z, 0, p_nodelist, 1, "double", OP_READ), op_arg_dat(p_z, 1, p_nodelist, 1, "double", OP_READ), op_arg_dat(p_z, 2, p_nodelist, 1, "double", OP_READ),op_arg_dat(p_z, 3, p_nodelist, 1, "double", OP_READ),op_arg_dat(p_z, 4, p_nodelist, 1, "double", OP_READ),op_arg_dat(p_z, 5, p_nodelist, 1, "double", OP_READ),op_arg_dat(p_z, 6, p_nodelist, 1, "double", OP_READ),op_arg_dat(p_z, 7, p_nodelist, 1, "double", OP_READ),
-               op_arg_dat(p_fx, 0, p_nodelist, 1, "double", OP_RW), op_arg_dat(p_fx, 1, p_nodelist, 1, "double", OP_RW), op_arg_dat(p_fx, 2, p_nodelist, 1, "double", OP_RW),op_arg_dat(p_fx, 3, p_nodelist, 1, "double", OP_RW),op_arg_dat(p_fx, 4, p_nodelist, 1, "double", OP_RW),op_arg_dat(p_fx, 5, p_nodelist, 1, "double", OP_RW),op_arg_dat(p_fx, 6, p_nodelist, 1, "double", OP_RW),op_arg_dat(p_fx, 7, p_nodelist, 1, "double", OP_RW),
-               op_arg_dat(p_fy, 0, p_nodelist, 1, "double", OP_RW), op_arg_dat(p_fy, 1, p_nodelist, 1, "double", OP_RW), op_arg_dat(p_fy, 2, p_nodelist, 1, "double", OP_RW),op_arg_dat(p_fy, 3, p_nodelist, 1, "double", OP_RW),op_arg_dat(p_fy, 4, p_nodelist, 1, "double", OP_RW),op_arg_dat(p_fy, 5, p_nodelist, 1, "double", OP_RW),op_arg_dat(p_fy, 6, p_nodelist, 1, "double", OP_RW),op_arg_dat(p_fy, 7, p_nodelist, 1, "double", OP_RW),
-               op_arg_dat(p_fz, 0, p_nodelist, 1, "double", OP_RW), op_arg_dat(p_fz, 1, p_nodelist, 1, "double", OP_RW), op_arg_dat(p_fz, 2, p_nodelist, 1, "double", OP_RW),op_arg_dat(p_fz, 3, p_nodelist, 1, "double", OP_RW),op_arg_dat(p_fz, 4, p_nodelist, 1, "double", OP_RW),op_arg_dat(p_fz, 5, p_nodelist, 1, "double", OP_RW),op_arg_dat(p_fz, 6, p_nodelist, 1, "double", OP_RW),op_arg_dat(p_fz, 7, p_nodelist, 1, "double", OP_RW),
+               op_arg_dat(p_fx, 0, p_nodelist, 1, "double", OP_INC), op_arg_dat(p_fx, 1, p_nodelist, 1, "double", OP_INC), op_arg_dat(p_fx, 2, p_nodelist, 1, "double", OP_INC),op_arg_dat(p_fx, 3, p_nodelist, 1, "double", OP_INC),op_arg_dat(p_fx, 4, p_nodelist, 1, "double", OP_INC),op_arg_dat(p_fx, 5, p_nodelist, 1, "double", OP_INC),op_arg_dat(p_fx, 6, p_nodelist, 1, "double", OP_INC),op_arg_dat(p_fx, 7, p_nodelist, 1, "double", OP_INC),
+               op_arg_dat(p_fy, 0, p_nodelist, 1, "double", OP_INC), op_arg_dat(p_fy, 1, p_nodelist, 1, "double", OP_INC), op_arg_dat(p_fy, 2, p_nodelist, 1, "double", OP_INC),op_arg_dat(p_fy, 3, p_nodelist, 1, "double", OP_INC),op_arg_dat(p_fy, 4, p_nodelist, 1, "double", OP_INC),op_arg_dat(p_fy, 5, p_nodelist, 1, "double", OP_INC),op_arg_dat(p_fy, 6, p_nodelist, 1, "double", OP_INC),op_arg_dat(p_fy, 7, p_nodelist, 1, "double", OP_INC),
+               op_arg_dat(p_fz, 0, p_nodelist, 1, "double", OP_INC), op_arg_dat(p_fz, 1, p_nodelist, 1, "double", OP_INC), op_arg_dat(p_fz, 2, p_nodelist, 1, "double", OP_INC),op_arg_dat(p_fz, 3, p_nodelist, 1, "double", OP_INC),op_arg_dat(p_fz, 4, p_nodelist, 1, "double", OP_INC),op_arg_dat(p_fz, 5, p_nodelist, 1, "double", OP_INC),op_arg_dat(p_fz, 6, p_nodelist, 1, "double", OP_INC),op_arg_dat(p_fz, 7, p_nodelist, 1, "double", OP_INC),
                op_arg_dat(p_determ, -1, OP_ID, 1, "double", OP_WRITE),
                op_arg_dat(p_sigxx, -1, OP_ID, 1, "double", OP_READ),
                op_arg_dat(p_sigyy, -1, OP_ID, 1, "double", OP_READ),
                op_arg_dat(p_sigzz, -1, OP_ID, 1, "double", OP_READ)
                );
+
+
 }
 
 /******************************************/
@@ -1637,9 +1655,9 @@ void CalcFBHourglassForceForElems()
                op_arg_dat(p_xd, 0, p_nodelist, 1, "double", OP_READ), op_arg_dat(p_xd, 1, p_nodelist, 1, "double", OP_READ), op_arg_dat(p_xd, 2, p_nodelist, 1, "double", OP_READ),op_arg_dat(p_xd, 3, p_nodelist, 1, "double", OP_READ),op_arg_dat(p_xd, 4, p_nodelist, 1, "double", OP_READ),op_arg_dat(p_xd, 5, p_nodelist, 1, "double", OP_READ),op_arg_dat(p_xd, 6, p_nodelist, 1, "double", OP_READ),op_arg_dat(p_xd, 7, p_nodelist, 1, "double", OP_READ),
                op_arg_dat(p_yd, 0, p_nodelist, 1, "double", OP_READ), op_arg_dat(p_yd, 1, p_nodelist, 1, "double", OP_READ), op_arg_dat(p_yd, 2, p_nodelist, 1, "double", OP_READ),op_arg_dat(p_yd, 3, p_nodelist, 1, "double", OP_READ),op_arg_dat(p_yd, 4, p_nodelist, 1, "double", OP_READ),op_arg_dat(p_yd, 5, p_nodelist, 1, "double", OP_READ),op_arg_dat(p_yd, 6, p_nodelist, 1, "double", OP_READ),op_arg_dat(p_yd, 7, p_nodelist, 1, "double", OP_READ),
                op_arg_dat(p_zd, 0, p_nodelist, 1, "double", OP_READ), op_arg_dat(p_zd, 1, p_nodelist, 1, "double", OP_READ), op_arg_dat(p_zd, 2, p_nodelist, 1, "double", OP_READ),op_arg_dat(p_zd, 3, p_nodelist, 1, "double", OP_READ),op_arg_dat(p_zd, 4, p_nodelist, 1, "double", OP_READ),op_arg_dat(p_zd, 5, p_nodelist, 1, "double", OP_READ),op_arg_dat(p_zd, 6, p_nodelist, 1, "double", OP_READ),op_arg_dat(p_zd, 7, p_nodelist, 1, "double", OP_READ),
-               op_arg_dat(p_fx, 0, p_nodelist, 1, "double", OP_RW), op_arg_dat(p_fx, 1, p_nodelist, 1, "double", OP_RW), op_arg_dat(p_fx, 2, p_nodelist, 1, "double", OP_RW),op_arg_dat(p_fx, 3, p_nodelist, 1, "double", OP_RW),op_arg_dat(p_fx, 4, p_nodelist, 1, "double", OP_RW),op_arg_dat(p_fx, 5, p_nodelist, 1, "double", OP_RW),op_arg_dat(p_fx, 6, p_nodelist, 1, "double", OP_RW),op_arg_dat(p_fx, 7, p_nodelist, 1, "double", OP_RW),
-               op_arg_dat(p_fy, 0, p_nodelist, 1, "double", OP_RW), op_arg_dat(p_fy, 1, p_nodelist, 1, "double", OP_RW), op_arg_dat(p_fy, 2, p_nodelist, 1, "double", OP_RW),op_arg_dat(p_fy, 3, p_nodelist, 1, "double", OP_RW),op_arg_dat(p_fy, 4, p_nodelist, 1, "double", OP_RW),op_arg_dat(p_fy, 5, p_nodelist, 1, "double", OP_RW),op_arg_dat(p_fy, 6, p_nodelist, 1, "double", OP_RW),op_arg_dat(p_fy, 7, p_nodelist, 1, "double", OP_RW),
-               op_arg_dat(p_fz, 0, p_nodelist, 1, "double", OP_RW), op_arg_dat(p_fz, 1, p_nodelist, 1, "double", OP_RW), op_arg_dat(p_fz, 2, p_nodelist, 1, "double", OP_RW),op_arg_dat(p_fz, 3, p_nodelist, 1, "double", OP_RW),op_arg_dat(p_fz, 4, p_nodelist, 1, "double", OP_RW),op_arg_dat(p_fz, 5, p_nodelist, 1, "double", OP_RW),op_arg_dat(p_fz, 6, p_nodelist, 1, "double", OP_RW),op_arg_dat(p_fz, 7, p_nodelist, 1, "double", OP_RW),
+               op_arg_dat(p_fx, 0, p_nodelist, 1, "double", OP_INC), op_arg_dat(p_fx, 1, p_nodelist, 1, "double", OP_INC), op_arg_dat(p_fx, 2, p_nodelist, 1, "double", OP_INC),op_arg_dat(p_fx, 3, p_nodelist, 1, "double", OP_INC),op_arg_dat(p_fx, 4, p_nodelist, 1, "double", OP_INC),op_arg_dat(p_fx, 5, p_nodelist, 1, "double", OP_INC),op_arg_dat(p_fx, 6, p_nodelist, 1, "double", OP_INC),op_arg_dat(p_fx, 7, p_nodelist, 1, "double", OP_INC),
+               op_arg_dat(p_fy, 0, p_nodelist, 1, "double", OP_INC), op_arg_dat(p_fy, 1, p_nodelist, 1, "double", OP_INC), op_arg_dat(p_fy, 2, p_nodelist, 1, "double", OP_INC),op_arg_dat(p_fy, 3, p_nodelist, 1, "double", OP_INC),op_arg_dat(p_fy, 4, p_nodelist, 1, "double", OP_INC),op_arg_dat(p_fy, 5, p_nodelist, 1, "double", OP_INC),op_arg_dat(p_fy, 6, p_nodelist, 1, "double", OP_INC),op_arg_dat(p_fy, 7, p_nodelist, 1, "double", OP_INC),
+               op_arg_dat(p_fz, 0, p_nodelist, 1, "double", OP_INC), op_arg_dat(p_fz, 1, p_nodelist, 1, "double", OP_INC), op_arg_dat(p_fz, 2, p_nodelist, 1, "double", OP_INC),op_arg_dat(p_fz, 3, p_nodelist, 1, "double", OP_INC),op_arg_dat(p_fz, 4, p_nodelist, 1, "double", OP_INC),op_arg_dat(p_fz, 5, p_nodelist, 1, "double", OP_INC),op_arg_dat(p_fz, 6, p_nodelist, 1, "double", OP_INC),op_arg_dat(p_fz, 7, p_nodelist, 1, "double", OP_INC),
                op_arg_dat(p_dvdx, -1, OP_ID, 8, "double", OP_READ), 
                op_arg_dat(p_dvdy, -1, OP_ID, 8, "double", OP_READ), 
                op_arg_dat(p_dvdz, -1, OP_ID, 8, "double", OP_READ), 
@@ -1650,6 +1668,8 @@ void CalcFBHourglassForceForElems()
                op_arg_dat(p_ss, -1, OP_ID, 1, "double", OP_READ),
                op_arg_dat(p_elemMass, -1, OP_ID, 1, "double", OP_READ)
    );
+
+
    // MPI_Barrier(MPI_COMM_WORLD);
 }
 
@@ -1712,8 +1732,11 @@ static inline void CalcForceForNodes()
                op_arg_dat(p_fy, -1, OP_ID, 1, "double", OP_WRITE),
                op_arg_dat(p_fz, -1, OP_ID, 1, "double", OP_WRITE));
 
+
   /* Calcforce calls partial, force, hourq */
+
   CalcVolumeForceForElems() ;
+
 }
 
 /******************************************/
@@ -1726,6 +1749,7 @@ void CalcAccelerationForNodes()
                op_arg_dat(p_fx, -1, OP_ID, 1, "double", OP_READ), op_arg_dat(p_fy, -1, OP_ID, 1, "double", OP_READ), op_arg_dat(p_fz, -1, OP_ID, 1, "double", OP_READ),
                op_arg_dat(p_nodalMass, -1, OP_ID, 1, "double", OP_READ)
                );
+
 }
 
 /******************************************/
@@ -1750,7 +1774,6 @@ void ApplyAccelerationBoundaryConditionsForNodes()
                op_arg_dat(p_zdd, -1, OP_ID, 1, "double", OP_WRITE),
                op_arg_dat(p_t_symmZ, -1, OP_ID, 1, "int", OP_READ)
                );
-
 }
 
 /******************************************/
@@ -1771,7 +1794,7 @@ static inline
 void CalcPositionForNodes()
 {
    op_par_loop(CalcPosForNodes, "CalcPosForNodes", nodes,
-               op_arg_dat(p_x, -1, OP_ID, 1, "double", OP_RW), op_arg_dat(p_y, -1, OP_ID, 1, "double", OP_RW), op_arg_dat(p_z, -1, OP_ID, 1, "double", OP_RW),
+               op_arg_dat(p_x, -1, OP_ID, 1, "double", OP_INC), op_arg_dat(p_y, -1, OP_ID, 1, "double", OP_INC), op_arg_dat(p_z, -1, OP_ID, 1, "double", OP_INC),
                op_arg_dat(p_xd, -1, OP_ID, 1, "double", OP_READ), op_arg_dat(p_yd, -1, OP_ID, 1, "double", OP_READ), op_arg_dat(p_zd, -1, OP_ID, 1, "double", OP_READ),
                op_arg_gbl(&m_deltatime, 1, "double", OP_READ)
                );
@@ -1923,7 +1946,7 @@ void CalcLagrangeElements()
 {
    if (m_numElem > 0) {
       CalcKinematicsForElems() ;
-
+      //TODO review should be ok
       op_par_loop(CalcLagrangeElemRemaining, "CalcLagrangeElemRemaining", elems,
                   op_arg_dat(p_dxx, -1, OP_ID, 1, "double", OP_RW), op_arg_dat(p_dyy, -1, OP_ID, 1, "double", OP_RW), op_arg_dat(p_dzz, -1, OP_ID, 1, "double", OP_RW), 
                   op_arg_dat(p_vdov, -1, OP_ID, 1, "double", OP_WRITE),
@@ -2032,9 +2055,9 @@ void CalcPressureForElemsHalfstep()
                op_arg_dat(p_compHalfStep, -1, OP_ID, 1, "double", OP_READ),
                op_arg_dat(p_pbvc, -1, OP_ID, 1, "double", OP_WRITE));
 
-
+   //NOTE changed p_pHalfStep to write review
    op_par_loop(CalcPHalfstep, "CalcPHalfstep", elems,
-               op_arg_dat(p_pHalfStep, -1, OP_ID, 1, "double", OP_RW),
+               op_arg_dat(p_pHalfStep, -1, OP_ID, 1, "double", OP_WRITE),
                op_arg_dat(p_bvc, -1, OP_ID, 1, "double", OP_READ),
                op_arg_dat(p_e_new, -1, OP_ID, 1, "double", OP_READ),
                op_arg_dat(p_vnewc, -1, OP_ID, 1, "double", OP_READ)
@@ -2086,6 +2109,7 @@ void CalcEnergyForElems(double* p_new, double* e_new, double* q_new,
 
    CalcPressureForElemsHalfstep();
 
+   //NOTE p_e_new may be an INC
    op_par_loop(CalcNewEStep2, "CalcNewEStep2", elems,
                op_arg_dat(p_compHalfStep, -1, OP_ID, 1, "double", OP_READ),
                op_arg_dat(p_delvc, -1, OP_ID, 1, "double", OP_READ),
@@ -2100,6 +2124,7 @@ void CalcEnergyForElems(double* p_new, double* e_new, double* q_new,
                op_arg_dat(p_q_old, -1, OP_ID, 1, "double", OP_READ)
    );
 
+   //NOTE p_e_new may be an INC
    op_par_loop(CalcNewEStep3, "CalcNewEStep3", elems,
                op_arg_dat(p_e_new, -1, OP_ID, 1, "double", OP_RW),
                op_arg_dat(p_work, -1, OP_ID, 1, "double", OP_READ)
@@ -2107,6 +2132,7 @@ void CalcEnergyForElems(double* p_new, double* e_new, double* q_new,
 
    CalcPressureForElems();
 
+   //NOTE p_e_new may be an INC
    op_par_loop(CalcNewEStep4, "CalcNewEStep4", elems,
                op_arg_dat(p_delvc, -1, OP_ID, 1, "double", OP_READ),
                op_arg_dat(p_pbvc, -1, OP_ID, 1, "double", OP_READ),
@@ -2123,7 +2149,7 @@ void CalcEnergyForElems(double* p_new, double* e_new, double* q_new,
    );
 
    CalcPressureForElems();
-
+   //NOTE p_q_new could probably be a write
    op_par_loop(CalcQNew, "CalcQNew", elems,
                op_arg_dat(p_delvc, -1, OP_ID, 1, "double", OP_READ),
                op_arg_dat(p_pbvc, -1, OP_ID, 1, "double", OP_READ),
@@ -2735,7 +2761,10 @@ int main(int argc, char *argv[])
 
    int numRanks ;
 
+std::cout << "CHENCK THAT STUFF IS PRINTING\n";
 #if USE_MPI      
+   std::cout << "USING MPI HERE JUST TO BE SURE\n";
+
    MPI_Comm_size(MPI_COMM_WORLD, &numRanks) ;
    MPI_Comm_rank(MPI_COMM_WORLD, &myRank) ;
 #else
@@ -2778,6 +2807,8 @@ int main(int argc, char *argv[])
    int col, row, plane, side;
    InitMeshDecomp(numRanks, myRank, &col, &row, &plane, &side);
 
+
+   //locDom
    int edgeElems = opts.nx;
    int edgeNodes = edgeElems+1;
 
