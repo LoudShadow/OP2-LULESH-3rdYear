@@ -2,12 +2,12 @@ cmake_minimum_required(VERSION 3.0)
 
 project(LULESH CXX)
 
-option(WITH_MPI    "Build LULESH with MPI"          TRUE)
+option(WITH_MPI    "Build LULESH with MPI"          FALSE)
 option(WITH_OPENMP "Build LULESH with OpenMP"       FALSE)
 option(WITH_SILO   "Build LULESH with silo support" FALSE)
 option(WITH_OP2 "Build LULESH with OP2" TRUE)
 option(OP2_SEQ "Build with OP2 seq" FALSE)
-option(WITH_HDF5 "Build LULESH with HDF5" TRUE)
+option(WITH_HDF5 "Build LULESH with HDF5" FALSE)
 
 if(WITH_HDF5)
   find_path(

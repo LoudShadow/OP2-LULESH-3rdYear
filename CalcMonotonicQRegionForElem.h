@@ -1,9 +1,10 @@
 // Stuff needed for boundary conditions
 // 2 BCs on each of 6 hexahedral faces (12 bits)
-// #define XI_M        0x00007
-// #define XI_M_SYMM   0x00001
-// #define XI_M_FREE   0x00002
-// #define XI_M_COMM   0x00004
+
+#define XI_M        0x00007
+#define XI_M_SYMM   0x00001
+#define XI_M_FREE   0x00002
+#define XI_M_COMM   0x00004
 
 // #define XI_P        0x00038
 // #define XI_P_SYMM   0x00008

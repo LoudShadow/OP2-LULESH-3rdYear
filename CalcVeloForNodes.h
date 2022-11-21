@@ -3,6 +3,7 @@ inline void CalcVeloForNodes(
                             const double *xdd, const double *ydd, const double *zdd,
                             const double *dt
 ){
+    //Review need for OP_inc
     double xdtmp, ydtmp, zdtmp ;
 
     xdtmp = xd[0] + xdd[0] * (*dt) ;
