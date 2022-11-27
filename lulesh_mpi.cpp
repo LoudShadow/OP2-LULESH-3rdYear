@@ -158,6 +158,7 @@ Additional BSD Notice
 
 #include <op_seq.h>
 // #include <hdf5.h>
+#include <mpi.h>
 
 #include "lulesh.h"
 // #include "const.h"
@@ -979,7 +980,7 @@ void initialise(int colLoc,
       }
    }
 
-   op_printf("Voume at 0: %d, Nodal Mass: %d\n", volo[0], nodalMass[0]);
+   op_printf("Voume at 0: %d, Nodal Mass: %d", volo[0], nodalMass[0]);
 
    // deposit initial energy
    // An energy of 3.948746e+7 is correct for a problem with
@@ -1797,7 +1798,7 @@ void CalcPositionForNodes()
                op_arg_dat(p_x, -1, OP_ID, 1, "double", OP_INC), op_arg_dat(p_y, -1, OP_ID, 1, "double", OP_INC), op_arg_dat(p_z, -1, OP_ID, 1, "double", OP_INC),
                op_arg_dat(p_xd, -1, OP_ID, 1, "double", OP_READ), op_arg_dat(p_yd, -1, OP_ID, 1, "double", OP_READ), op_arg_dat(p_zd, -1, OP_ID, 1, "double", OP_READ),
                op_arg_gbl(&m_deltatime, 1, "double", OP_READ)
-               );
+               );  
 }
 
 /******************************************/
@@ -2486,12 +2487,9 @@ static void PrintCommandLineOptions(char *execname, int myRank)
 static void ParseError(const char *message, int myRank)
 {
    if (myRank == 0) {
-      printf("%s\n", message);
-#if USE_MPI      
+      printf("%s\n", message);     
       MPI_Abort(MPI_COMM_WORLD, -1);
-#else
-      exit(-1);
-#endif
+
    }
 }
 
@@ -2589,11 +2587,8 @@ void ParseCommandLineOptions(int argc, char *argv[],
          /* -h */
          else if (strcmp(argv[i], "-h") == 0) {
             PrintCommandLineOptions(argv[0], myRank);
-#if USE_MPI            
             MPI_Abort(MPI_COMM_WORLD, 0);
-#else
-            exit(0);
-#endif
+
          }
          else if(strcmp(argv[i], "OP_NO_REALLOC" ) == 0){
             i++;
@@ -2697,28 +2692,16 @@ void InitMeshDecomp(int numRanks, int myRank,
    // Assume cube processor layout for now 
    testProcs = int(cbrt(double(numRanks))+0.5) ;
    if (testProcs*testProcs*testProcs != numRanks) {
-      printf("Num processors must be a cube of an integer (1, 8, 27, ...)\n") ;
-#if USE_MPI      
+      printf("Num processors must be a cube of an integer (1, 8, 27, ...)\n") ;    
       MPI_Abort(MPI_COMM_WORLD, -1) ;
-#else
-      exit(-1);
-#endif
    }
    if (sizeof(double) != 4 && sizeof(double) != 8) {
       printf("MPI operations only support float and double right now...\n");
-#if USE_MPI      
       MPI_Abort(MPI_COMM_WORLD, -1) ;
-#else
-      exit(-1);
-#endif
    }
    if (MAX_FIELDS_PER_MPI_COMM > CACHE_COHERENCE_PAD_REAL) {
       printf("corner element comm buffers too small.  Fix code.\n") ;
-#if USE_MPI      
       MPI_Abort(MPI_COMM_WORLD, -1) ;
-#else
-      exit(-1);
-#endif
    }
 
    dx = testProcs ;
@@ -2728,11 +2711,7 @@ void InitMeshDecomp(int numRanks, int myRank,
    // temporary test
    if (dx*dy*dz != numRanks) {
       printf("error -- must have as many domains as procs\n") ;
-#if USE_MPI      
       MPI_Abort(MPI_COMM_WORLD, -1) ;
-#else
-      exit(-1);
-#endif
    }
    int remainder = dx*dy*dz % numRanks ;
    if (myRank < remainder) {
@@ -2762,17 +2741,10 @@ int main(int argc, char *argv[])
    int numRanks ;
 
 std::cout << "CHENCK THAT STUFF IS PRINTING\n";
-#if USE_MPI      
    std::cout << "USING MPI HERE JUST TO BE SURE\n";
 
    MPI_Comm_size(MPI_COMM_WORLD, &numRanks) ;
    MPI_Comm_rank(MPI_COMM_WORLD, &myRank) ;
-#else
-   std::cout << "NOT USING MPI\n";
-
-   numRanks = 1;
-   myRank = 0;
-#endif   
 
    /* Set defaults that can be overridden by command line opts */
    opts.its = 9999999; // Iterations
