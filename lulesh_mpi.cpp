@@ -343,7 +343,7 @@ double* ss;
 double* elemMass;
 
 /* Node-centered */
-double* x,*y,*z;                  /* coordinates */
+double* x,*y,*z,*loc;                  /* coordinates */
 
 double* xd,*yd,*zd;                 /* velocities */
 
@@ -379,6 +379,59 @@ int m_numElem ;
 int m_numNode ;
 
 
+//! global Data //
+int g_sizeX ;
+int g_sizeY ;
+int g_sizeZ ;
+int g_numElem ;
+int g_numNode ;
+
+// Region information
+int *g_m_regElemSize ;   // Size of region sets
+int *g_m_regNumList ;    // Region number per domain element
+int **g_m_regElemlist ;  // region indexset 
+
+int* g_nodelist;
+
+int* g_lxim; /* element connectivity across each face */
+int* g_lxip;
+int* g_letam;
+int* g_letap;
+int* g_lzetam;
+int* g_lzetap;
+
+int* g_elemBC;            /* symmetry/free-surface flags for each elem face */
+
+double* g_e;
+double* g_p;
+
+double* g_q;
+
+double* g_v;     /* relative volume */        
+double* g_volo;  /* new relative volume -- temporary */
+
+double* g_ss;
+
+double* g_elemMass;
+
+/* Node-centered */
+double* g_x,*g_y,*g_z,*g_loc;                  /* coordinates */
+
+double* g_xd,*g_yd,*g_zd;                 /* velocities */
+
+double* g_xdd,*g_ydd,*g_zdd;              /* accelerations */
+
+double* g_nodalMass;          /* mass */
+
+int* g_t_symmX,*g_t_symmY,*g_t_symmZ;
+
+//! global Data end //
+
+
+
+
+
+
 // Used in setup
 int rowMin, rowMax;
 int colMin, colMax;
@@ -406,6 +459,7 @@ op_dat p_xd, p_yd, p_zd;
 op_dat p_xdd, p_ydd, p_zdd;
 
 op_dat p_x, p_y, p_z;
+op_dat p_loc;
 
 op_dat p_qq;
 op_dat p_ql;
@@ -561,7 +615,34 @@ void allocateElems(){
    bvc = (double*) malloc(m_numElem *sizeof(double));
    pbvc = (double*) malloc(m_numElem *sizeof(double));
    pHalfStep = (double*) malloc(m_numElem *sizeof(double));
-}
+};
+
+static inline 
+void allocateGlobalElems(){
+   g_nodelist = (int*) malloc(g_numElem*8 * sizeof(int));
+
+   g_lxim = (int*) malloc(g_numElem * sizeof(int));
+   g_lxip = (int*) malloc(g_numElem * sizeof(int));
+   g_letam = (int*) malloc(g_numElem * sizeof(int));
+   g_letap = (int*) malloc(g_numElem * sizeof(int));
+   g_lzetam = (int*) malloc(g_numElem * sizeof(int));
+   g_lzetap = (int*) malloc(g_numElem * sizeof(int));
+
+   g_elemBC = (int*) malloc(g_numElem * sizeof(int));
+
+   g_e = (double*) malloc(g_numElem * sizeof(double));
+   g_p = (double*) malloc(g_numElem * sizeof(double));
+
+   g_q = (double*) malloc(g_numElem * sizeof(double));
+
+   g_v = (double*) malloc(g_numElem * sizeof(double));
+
+   g_volo = (double*) malloc(g_numElem * sizeof(double));
+
+   g_ss = (double*) malloc(g_numElem * sizeof(double));
+
+   g_elemMass = (double*) malloc(g_numElem * sizeof(double));
+};
 
 static inline
 void allocateNodes(){
@@ -569,6 +650,8 @@ void allocateNodes(){
    x = (double*) malloc(m_numNode * sizeof(double)); // Coordinates
    y = (double*) malloc(m_numNode * sizeof(double));
    z = (double*) malloc(m_numNode * sizeof(double));
+   loc = (double*) malloc(3 * m_numNode * sizeof(double)); // Coordinates
+
 
    xd = (double*) malloc(m_numNode * sizeof(double)); // Velocities
    yd = (double*) malloc(m_numNode * sizeof(double));
@@ -592,21 +675,118 @@ void allocateNodes(){
 }
 
 static inline
-void initialise(int colLoc,
-               int rowLoc, int planeLoc,
-               int nx, int tp, int nr, int balance, int cost){
+void allocateGlobalNodes(){
+
+   g_x = (double*) malloc(g_numNode * sizeof(double)); // Coordinates
+   g_y = (double*) malloc(g_numNode * sizeof(double));
+   g_z = (double*) malloc(g_numNode * sizeof(double));
+   g_loc = (double*) malloc(3 * g_numNode * sizeof(double));
+
+   g_xd = (double*) malloc(g_numNode * sizeof(double)); // Velocities
+   g_yd = (double*) malloc(g_numNode * sizeof(double));
+   g_zd = (double*) malloc(g_numNode * sizeof(double));
+
+   g_xdd = (double*) malloc(g_numNode * sizeof(double)); //Accelerations
+   g_ydd = (double*) malloc(g_numNode * sizeof(double));
+   g_zdd = (double*) malloc(g_numNode * sizeof(double));
+
+   g_t_symmX = (int*) malloc(g_numNode * sizeof(int));
+   g_t_symmY = (int*) malloc(g_numNode * sizeof(int));
+   g_t_symmZ = (int*) malloc(g_numNode * sizeof(int));
+
+   g_nodalMass = (double*) malloc(g_numNode * sizeof(double));  // mass
+}
+
+
+static inline
+void initialiseGlobal(int nr){
+   m_numReg = nr;
+
+   m_dtfixed = double(-1.0e-6) ; // Negative means use courant condition
+   m_stoptime  = double(1.0e-2); // *double(edgeElems*tp/45.0) ;
+
+   // Initial conditions
+   m_deltatimemultlb = double(1.1) ;
+   m_deltatimemultub = double(1.2) ;
+   m_dtcourant = double(1.0e+20) ;
+   m_dthydro   = double(1.0e+20) ;
+   m_dtmax     = double(1.0e-2) ;
+   m_time    = double(0.) ;
+   m_cycle   = int(0) ;
+}
+
+
+static int compute_local_size(int global_size, int mpi_comm_size,
+                              int mpi_rank) {
+  int local_size = global_size / mpi_comm_size;
+  int remainder = (int)fmod(global_size, mpi_comm_size);
+
+  if (mpi_rank < remainder) {
+    local_size = local_size + 1;
+  }
+  return local_size;
+}
+
+//Given a cube size and an aray index caculate its x,y,z
+static inline
+void get_loc_from_index(int dx,int dy,int dz,int location,
+      int *x, int *y, int *z){
+
+   *x = location % dx ;
+   *y = (location / dx) % dy ;
+   *z = location / (dx*dy) ;
+}
+
+static inline
+int get_rank_from_index(int index, int global_size, int number_of_ranks){
+   int currentAccumulated =0;
+   int local_size = global_size / number_of_ranks;
+   int remainder = global_size % number_of_ranks;
+
+   int rank=-1;
+   while (currentAccumulated<=index){
+      rank+=1;
+      currentAccumulated+=local_size;
+      if (rank < remainder) {
+         currentAccumulated = currentAccumulated + 1;
+      }      
+   }
+   return rank;
+}
+
+
+
+//initialise using the static data
+static inline
+void initialise(int myRank,
+               int nx, int tp, int nr, int balance, int cost, Int8_t numRanks){
+
+   g_numElem = nx*nx*nx;
+   g_numNode = (nx+1)*(nx+1)*(nx+1);
+   g_sizeX = nx ;
+   g_sizeY = nx ;
+   g_sizeZ = nx ;
+
+   m_numElem =  compute_local_size(g_numElem,(Int8_t)numRanks,myRank);
+   m_numNode =  compute_local_size(g_numNode,(Int8_t)numRanks,myRank);
+
+   int starting_m_numElem =0;
+   int starting_m_numNode =0;
+   for (int i =0; i<myRank; i++){
+      starting_m_numElem +=  compute_local_size(g_numElem,(Int8_t)numRanks,i);
+      starting_m_numNode +=  compute_local_size(g_numNode,(Int8_t)numRanks,i);
+   }
+
+   int colLoc =0;
+   int rowLoc =0;
+   int planeLoc=0;
+
+
    int edgeElems = nx ;
    int edgeNodes = edgeElems+1 ;
 
-   sizeX = edgeElems ;
-   sizeY = edgeElems ;
-   sizeZ = edgeElems ;
-   m_numElem = edgeElems * edgeElems * edgeElems;
 
-   m_numNode = edgeNodes * edgeNodes * edgeNodes;
-
-   m_regNumList = (int*) malloc(m_numElem * sizeof(int));
-
+   printf("HERE NOW 3.1\n");
    //! Setup Comm Buffer, Should not be necessary in final app
    rowMin = (rowLoc == 0)        ? 0 : 1;
    rowMax = (rowLoc == tp-1)     ? 0 : 1;
@@ -615,6 +795,7 @@ void initialise(int colLoc,
    planeMin = (planeLoc == 0)    ? 0 : 1;
    planeMax = (planeLoc == tp-1) ? 0 : 1;
 
+   //All orgional
    for(int i=0; i<m_numElem;++i){
       p[i] = double(0.0);
       e[i] = double(0.0);
@@ -643,301 +824,610 @@ void initialise(int colLoc,
       nodalMass[i] = double(0.0) ;
    }
 
+
+
+   printf("HERE NOW 3.2\n");
    //!Build Mesh function !HERE
-   int meshEdgeElems = tp * nx;
-   // op_printf("Building Mesh with planeloc: %d, col: %d, rowLoc: %d, meshEdge: %d\n", planeLoc, colLoc, rowLoc, meshEdgeElems);
+
+   // Happy with this
+   int meshEdgeElems = tp * nx;   
+
+   int curr_z,curr_y,curr_x;
+   get_loc_from_index(edgeNodes,edgeNodes,edgeNodes,starting_m_numNode, &curr_x, &curr_y, &curr_z);
+
+
    int nidx = 0;
-   double tz = double(1.125)*double(planeLoc*nx)/double(meshEdgeElems) ;
-   for (int plane=0; plane<edgeNodes; ++plane) {
-      double ty = double(1.125)*double(rowLoc*nx)/double(meshEdgeElems) ;
-      for (int row=0; row<edgeNodes; ++row) {
-         double tx = double(1.125)*double(colLoc*nx)/double(meshEdgeElems) ;
-         for (int col=0; col<edgeNodes; ++col) {
-         x[nidx] = tx ;
-         y[nidx] = ty ;
-         z[nidx] = tz ;
-         ++nidx ;
-         // tx += ds ; // may accumulate roundoff... 
-         tx = double(1.125)*double(colLoc*nx+col+1)/double(meshEdgeElems) ;
+
+   while (nidx < m_numNode && curr_z<edgeNodes){
+      double tz = double(1.125)*double(curr_z)/double(meshEdgeElems) ;
+      while (nidx < m_numNode && curr_y<edgeNodes){
+         double ty = double(1.125)*double(curr_y)/double(meshEdgeElems);
+         while (nidx < m_numNode && curr_x<edgeNodes){
+            double tx = double(1.125)*double(curr_x)/double(meshEdgeElems);
+            x[nidx] = tx ;
+            y[nidx] = ty ;
+            z[nidx] = tz ;
+            ++nidx;
+            ++curr_x;
          }
-         // ty += ds ;  // may accumulate roundoff... 
-         ty = double(1.125)*double(rowLoc*nx+row+1)/double(meshEdgeElems) ;
+         curr_x=0;
+         ++curr_y;
       }
-      // tz += ds ;  // may accumulate roundoff... 
-      tz = double(1.125)*double(planeLoc*nx+plane+1)/double(meshEdgeElems) ;
+      curr_y=0;
+      ++curr_z;
    }
-
-   // embed hexehedral elements in nodal point lattice 
+   
+   // double tz = double(1.125)*double(planeLoc*nx)/double(meshEdgeElems) ;
+   // for (int plane=0; plane<edgeNodes; ++plane) {
+   //    double ty = double(1.125)*double(rowLoc*nx)/double(meshEdgeElems) ;
+   //    for (int row=0; row<edgeNodes; ++row) {
+   //       double tx = double(1.125)*double(colLoc*nx)/double(meshEdgeElems) ;
+   //       for (int col=0; col<edgeNodes; ++col) {
+   //          printf("0? %e %e %e\n",tz,ty,tx);
+   //          g_x[nidx] = tx ;
+   //          g_y[nidx] = ty ;
+   //          g_z[nidx] = tz ;
+   //          ++nidx ;
+   //          // tx += ds ; // may accumulate roundoff... 
+   //          tx = double(1.125)*double(colLoc*nx+col+1)/double(meshEdgeElems) ;
+   //       }
+   //       // ty += ds ;  // may accumulate roundoff... 
+   //       ty = double(1.125)*double(rowLoc*nx+row+1)/double(meshEdgeElems) ;
+   //    }
+   //    // tz += ds ;  // may accumulate roundoff... 
+   //    tz = double(1.125)*double(planeLoc*nx+plane+1)/double(meshEdgeElems) ;
+   // }
+   //NEW Version
+   //genreate new stargin points for each version
+   
+   //Happy with this for now
    int zidx = 0 ;
-   nidx = 0 ;
-   for (int plane=0; plane<edgeElems; ++plane) {
-      for (int row=0; row<edgeElems; ++row) {
-         for (int col=0; col<edgeElems; ++col) {
-         int *localNode = &nodelist[zidx*int(8)] ;
+   get_loc_from_index(edgeElems,edgeElems,edgeElems,starting_m_numElem, &curr_x, &curr_y, &curr_z);
+   nidx = (curr_z*edgeElems*edgeElems) 
+         + (curr_y*edgeElems) 
+         + (curr_x) 
 
-         localNode[0] = nidx                                       ;
-         localNode[1] = nidx                                   + 1 ;
-         localNode[2] = nidx                       + edgeNodes + 1 ;
-         localNode[3] = nidx                       + edgeNodes     ;
-         localNode[4] = nidx + edgeNodes*edgeNodes                 ;
-         localNode[5] = nidx + edgeNodes*edgeNodes             + 1 ;
-         localNode[6] = nidx + edgeNodes*edgeNodes + edgeNodes + 1 ;
-         localNode[7] = nidx + edgeNodes*edgeNodes + edgeNodes     ;
-         ++zidx ;
-         ++nidx ;
+         + (curr_y)
+         + (curr_z*edgeElems)
+
+         + (curr_z*edgeNodes);
+
+   while (zidx < m_numElem && curr_z<edgeElems){
+      while (zidx < m_numElem && curr_y<edgeElems){
+         while (zidx < m_numElem && curr_x<edgeElems){
+            int *localNode = &nodelist[zidx*int(8)] ;
+
+            localNode[0] = nidx                                       ;
+            localNode[1] = nidx                                   + 1 ;
+            localNode[2] = nidx                       + edgeNodes + 1 ;
+            localNode[3] = nidx                       + edgeNodes     ;
+            localNode[4] = nidx + edgeNodes*edgeNodes                 ;
+            localNode[5] = nidx + edgeNodes*edgeNodes             + 1 ;
+            localNode[6] = nidx + edgeNodes*edgeNodes + edgeNodes + 1 ;
+            localNode[7] = nidx + edgeNodes*edgeNodes + edgeNodes     ;
+
+            ++zidx;
+            ++nidx ;
+            ++curr_x;
          }
+         curr_x=0;
+         ++curr_y;
          ++nidx ;
       }
+      curr_y=0;
+      ++curr_z;
       nidx += edgeNodes ;
    }
+
+   //OLD version   
+   // embed hexehedral elements in nodal point lattice 
+
+   // int zidx = 0 ;
+   // nidx = 0 ;
+   // printf("HERE NOW 3.3\n");
+
+   // for (int plane=0; plane<edgeElems; ++plane) {
+   //    for (int row=0; row<edgeElems; ++row) {
+   //       for (int col=0; col<edgeElems; ++col) {
+   //          int *localNode = &g_nodelist[zidx*int(8)] ;
+
+   //          localNode[0] = nidx                                       ;
+   //          localNode[1] = nidx                                   + 1 ;
+   //          localNode[2] = nidx                       + edgeNodes + 1 ;
+   //          localNode[3] = nidx                       + edgeNodes     ;
+   //          localNode[4] = nidx + edgeNodes*edgeNodes                 ;
+   //          localNode[5] = nidx + edgeNodes*edgeNodes             + 1 ;
+   //          localNode[6] = nidx + edgeNodes*edgeNodes + edgeNodes + 1 ;
+   //          localNode[7] = nidx + edgeNodes*edgeNodes + edgeNodes     ;
+   //          ++zidx ;
+   //          ++nidx ;
+   //       }
+   //       ++nidx ;
+   //    }
+   //    nidx += edgeNodes ;
+   // }
+
+   // for (int i=0; i<g_numElem; i++){
+   //    printf("%d? %d\n",myRank,g_nodelist[i*8]);
+
+   // }
+
+
    //! End Build Mesh Function
+   printf("HERE NOW 3.4\n");
 
    //! Start Create Region Sets
+   //regions are just not used
    srand(0);
-   int myRank = 0;
+   // int myRank = 0;
 
    m_numReg = nr;
+   // m_regNumList = (int*) malloc(m_numElem * sizeof(int));
    m_regElemSize = (int*) malloc(m_numReg * sizeof(int));
    m_regElemlist = (int**) malloc(m_numReg * sizeof(int));
-   int nextIndex = 0;
-   //if we only have one region just fill it
-   // Fill out the regNumList with material numbers, which are always
-   // the region index plus one 
-   if(m_numReg == 1){
-      while(nextIndex < m_numElem){
-         m_regNumList[nextIndex] = 1;
-         nextIndex++;
-      }
-      m_regElemSize[0] = 0;
-   } else {//If we have more than one region distribute the elements.
-      int regionNum;
-      int regionVar;
-      int lastReg = -1;
-      int binSize;
-      int elements;
-      int runto = 0;
-      int costDenominator = 0;
-      int* regBinEnd = (int*) malloc(m_numReg * sizeof(int));
-      //Determine the relative weights of all the regions.  This is based off the -b flag.  Balance is the value passed into b.  
-      for(int i=0; i<m_numReg;++i){
-         m_regElemSize[i] = 0;
-         costDenominator += pow((i+1), balance);//Total sum of all regions weights
-         regBinEnd[i] = costDenominator;  //Chance of hitting a given region is (regBinEnd[i] - regBinEdn[i-1])/costDenominator
-      }
-      //Until all elements are assigned
-      while (nextIndex < m_numElem) {
-         //pick the region
-         regionVar = rand() % costDenominator;
-         int i = 0;
-         while(regionVar >= regBinEnd[i]) i++;
-         //rotate the regions based on MPI rank.  Rotation is Rank % m_numRegions this makes each domain have a different region with 
-         //the highest representation
-         regionNum = ((i+myRank)% m_numReg) +1;
-         while(regionNum == lastReg){
-            regionVar = rand() % costDenominator;
-            i = 0;
-            while(regionVar >= regBinEnd[i]) i++;
-            regionNum = ((i + myRank) % m_numReg) + 1;
-         }
-         //Pick the bin size of the region and determine the number of elements.
-         binSize = rand() % 1000;
-         if(binSize < 773) {
-	         elements = rand() % 15 + 1;
-	      }
-	      else if(binSize < 937) {
-	         elements = rand() % 16 + 16;
-	      }
-	      else if(binSize < 970) {
-	         elements = rand() % 32 + 32;
-	      }
-	      else if(binSize < 974) {
-	         elements = rand() % 64 + 64;
-	      } 
-	      else if(binSize < 978) {
-	         elements = rand() % 128 + 128;
-	      }
-	      else if(binSize < 981) {
-	         elements = rand() % 256 + 256;
-	      }
-	      else
-	         elements = rand() % 1537 + 512;
-         runto = elements + nextIndex;
-	      //Store the elements.  If we hit the end before we run out of elements then just stop.
-         while (nextIndex < runto && nextIndex < m_numElem) {
-	         m_regNumList[nextIndex] = regionNum;
-	         nextIndex++;
-	      }
-         lastReg = regionNum;
-      }
-      delete [] regBinEnd; 
-   }
-      // Convert m_regNumList to region index sets
-   // First, count size of each region 
-   for (int i=0 ; i<m_numElem ; ++i) {
-      int r = m_regNumList[i]-1; // region index == regnum-1
-      m_regElemSize[r]++;
-   }
-   // Second, allocate each region index set
-   for (int i=0 ; i<m_numReg ; ++i) {
-      m_regElemlist[i] = (int*) malloc(m_regElemSize[i]*sizeof(int));
-      m_regElemSize[i] = 0;
-   }
-   // Third, fill index sets
-   for (int i=0 ; i<m_numElem ; ++i) {
-      int r = m_regNumList[i]-1;       // region index == regnum-1
-      int regndx = m_regElemSize[r]++; // Note increment
-      m_regElemlist[r][regndx] = i;
-   }
+
+
+   // int nextIndex = 0;
+   // //if we only have one region just fill it
+   // // Fill out the regNumList with material numbers, which are always
+   // // the region index plus one 
+   // if(m_numReg == 1){
+   //    printf("HERE NOW 3.4.1\n");
+
+   //    // while(nextIndex < g_numElem){
+   //    //    m_regNumList[nextIndex] = 1;
+   //    //    nextIndex++;
+   //    // }
+   //    m_regElemSize[0] = 0;
+   
+   // //NOT SUPPORTED
+   // } else {//If we have more than one region distribute the elements.
+   //    printf("HERE NOW 3.4.2\n");
+
+   //    int regionNum;
+   //    int regionVar;
+   //    int lastReg = -1;
+   //    int binSize;
+   //    int elements;
+   //    int runto = 0;
+   //    int costDenominator = 0;
+   //    int* g_regBinEnd = (int*) malloc(m_numReg * sizeof(int));
+   //    //Determine the relative weights of all the regions.  This is based off the -b flag.  Balance is the value passed into b.  
+   //    for(int i=0; i<m_numReg;++i){
+   //       g_m_regElemSize[i] = 0;
+   //       costDenominator += pow((i+1), balance);//Total sum of all regions weights
+   //       g_regBinEnd[i] = costDenominator;  //Chance of hitting a given region is (regBinEnd[i] - regBinEdn[i-1])/costDenominator
+   //    }
+   //    //Until all elements are assigned
+   //    while (nextIndex < m_numElem) {
+   //       //pick the region
+   //       regionVar = rand() % costDenominator;
+   //       int i = 0;
+   //       while(regionVar >= g_regBinEnd[i]) i++;
+   //       //rotate the regions based on MPI rank.  Rotation is Rank % m_numRegions this makes each domain have a different region with 
+   //       //the highest representation
+   //       regionNum = ((i+myRank)% m_numReg) +1;
+   //       while(regionNum == lastReg){
+   //          regionVar = rand() % costDenominator;
+   //          i = 0;
+   //          while(regionVar >= g_regBinEnd[i]) i++;
+   //          regionNum = ((i + myRank) % m_numReg) + 1;
+   //       }
+   //       //Pick the bin size of the region and determine the number of elements.
+   //       binSize = rand() % 1000;
+   //       if(binSize < 773) {
+	//          elements = rand() % 15 + 1;
+	//       }
+	//       else if(binSize < 937) {
+	//          elements = rand() % 16 + 16;
+	//       }
+	//       else if(binSize < 970) {
+	//          elements = rand() % 32 + 32;
+	//       }
+	//       else if(binSize < 974) {
+	//          elements = rand() % 64 + 64;
+	//       } 
+	//       else if(binSize < 978) {
+	//          elements = rand() % 128 + 128;
+	//       }
+	//       else if(binSize < 981) {
+	//          elements = rand() % 256 + 256;
+	//       }
+	//       else
+	//          elements = rand() % 1537 + 512;
+   //       runto = elements + nextIndex;
+	//       //Store the elements.  If we hit the end before we run out of elements then just stop.
+   //       while (nextIndex < runto && nextIndex < m_numElem) {
+	//          g_m_regNumList[nextIndex] = regionNum;
+	//          nextIndex++;
+	//       }
+   //       lastReg = regionNum;
+   //    }
+   //    delete [] g_regBinEnd; 
+   // }
+   // // Convert m_regNumList to region index sets
+   // // First, count size of each region 
+   //    printf("HERE NOW 3.4.3\n");
+
+
+
+
+   // for (int i=0 ; i<g_numElem ; ++i) {
+   //    // int r = g_m_regNumList[i]-1; // region index == regnum-1
+   //    int r= 0
+   //    g_m_regElemSize[r]++;
+   // }
+   // // Second, allocate each region index set
+   // for (int i=0 ; i<m_numReg ; ++i) {
+   //    g_m_regElemlist[i] = (int*) malloc(g_m_regElemSize[i]*sizeof(int));
+   //    g_m_regElemSize[i] = 0;
+   // }
+   //       printf("HERE NOW 3.4.4\n");
+
+   // // Third, fill index sets
+   // for (int i=0 ; i<g_numElem ; ++i) {
+
+   //    // int r = g_m_regNumList[i]-1;       // region index == regnum-1
+   //    int r = 0;       // region index == regnum-1
+   //    int regndx = g_m_regElemSize[r]++; // Note increment
+
+   //    m_regElemlist[r][regndx] = i;
+   // }
+
+
 
    //! End Create Region Sets
+   printf("HERE NOW 3.5\n");
 
    //! Setup Symmetry Planes Function !HERE
-   for (int i = 0; i<m_numNode;++i){ 
+
+   for (int i = 0; i<m_numNode;++i){
    // for (int i = 0; i<m_numNode*3;++i){
       t_symmX[i] |= FREE_NODE; 
       t_symmY[i] |= FREE_NODE;
       t_symmZ[i] |= FREE_NODE;
    }
+
+   //new Version
+   // get_loc_from_index(edgeNodes,edgeNodes,edgeNodes,starting_m_numNode, &curr_x, &curr_y, &curr_z);
+   
    nidx = 0 ;
    for (int i=0; i<edgeNodes; ++i) {
       int planeInc = i*edgeNodes*edgeNodes ;
       int rowInc   = i*edgeNodes ;
       for (int j=0; j<edgeNodes; ++j) {
          if (planeLoc == 0) {
-            // symmZ[nidx] = rowInc   + j ;
-            t_symmZ[rowInc + j] |= BOUNDARY_NODE;
+            if ( rowInc + j>=starting_m_numNode && rowInc + j<starting_m_numNode+m_numNode ){
+               // symmZ[nidx] = rowInc   + j ;
+               t_symmZ[rowInc + j-starting_m_numNode] |= BOUNDARY_NODE;
+            }
          }
          if (rowLoc == 0) {
-            // symmY[nidx] = planeInc + j ;
-            t_symmY[planeInc+j] |= BOUNDARY_NODE;
+            if ( planeInc + j>=starting_m_numNode && planeInc + j<starting_m_numNode+m_numNode ){
+               // symmY[nidx] = planeInc + j ;
+               t_symmY[planeInc+j-starting_m_numNode] |= BOUNDARY_NODE;
+            }
          }
          if (colLoc == 0) {
-            // symmX[nidx] = planeInc + j*edgeNodes ;
-            t_symmX[planeInc + j*edgeNodes] |= BOUNDARY_NODE;
+            if ( planeInc + j*edgeNodes>=starting_m_numNode && planeInc + j*edgeNodes<starting_m_numNode+m_numNode ){
+               // symmX[nidx] = planeInc + j*edgeNodes ;
+               t_symmX[planeInc + j*edgeNodes-starting_m_numNode] |= BOUNDARY_NODE;
+            }
          }
          ++nidx ;
       }
    }
+
+
+
+   //OLD version
+   // nidx = 0 ;
+   // for (int i=0; i<edgeNodes; ++i) {
+   //    int planeInc = i*edgeNodes*edgeNodes ;
+   //    int rowInc   = i*edgeNodes ;
+   //    for (int j=0; j<edgeNodes; ++j) {
+   //       if (planeLoc == 0) {
+   //          // symmZ[nidx] = rowInc   + j ;
+   //          g_t_symmZ[rowInc + j] |= BOUNDARY_NODE;
+   //       }
+   //       if (rowLoc == 0) {
+   //          // symmY[nidx] = planeInc + j ;
+   //          g_t_symmY[planeInc+j] |= BOUNDARY_NODE;
+   //       }
+   //       if (colLoc == 0) {
+   //          // symmX[nidx] = planeInc + j*edgeNodes ;
+   //          g_t_symmX[planeInc + j*edgeNodes] |= BOUNDARY_NODE;
+   //       }
+   //       ++nidx ;
+   //    }
+   // }
+   // for (int i=0; i<m_numNode; i++){
+   //    printf("%d?%d) %d %d %d\n" ,myRank,i,g_t_symmZ[i],g_t_symmY[i],g_t_symmX[i]);
+   // }
+   
+
+
    //! End Setup Symmetry Plnes Function
+   printf("HERE NOW 3.6\n");
 
    //! Setup Elem Connectivity Function
-   lxim[0] = 0 ;
-   for (int i=1; i<m_numElem; ++i) {
-      lxim[i]   = i-1 ;
-      lxip[i-1] = i ;
-   }
-   lxip[m_numElem-1] = m_numElem-1 ;
-
-   for (int i=0; i<edgeElems; ++i) {
-      letam[i] = i ; 
-      letap[m_numElem-edgeElems+i] = m_numElem-edgeElems+i ;
-   }
-   for (int i=edgeElems; i<m_numElem; ++i) {
-      letam[i] = i-edgeElems ;
-      letap[i-edgeElems] = i ;
+   for (int i=0; i<m_numElem; ++i) {
+      lxim[i] = std::max(0,i+starting_m_numElem-1);
+      lxip[i] = std::min(g_numElem-1  ,i+starting_m_numElem+1) ;
    }
 
-   for (int i=0; i<edgeElems*edgeElems; ++i) {
-      lzetam[i] = i ;
-      lzetap[m_numElem-edgeElems*edgeElems+i] = m_numElem-edgeElems*edgeElems+i ;
+   for (int i=0; i<m_numElem; ++i ){
+      if (i+starting_m_numElem < edgeElems){
+         letam[i] = i+starting_m_numElem;
+      }else{
+         letam[i] = i+starting_m_numElem-edgeElems ;
+      }
+
+      if (i+starting_m_numElem >= g_numElem-edgeElems){
+         letap[i] = i+starting_m_numElem;
+      }else{
+         letap[i] = i+starting_m_numElem+edgeElems ;
+      }
    }
-   for (int i=edgeElems*edgeElems; i<m_numElem; ++i) {
-      lzetam[i] = i - edgeElems*edgeElems ;
-      lzetap[i-edgeElems*edgeElems] = i ;
+
+   for (int i=0; i<m_numElem; ++i ){
+      if (i+starting_m_numElem < edgeElems*edgeElems){
+         lzetam[i] = i+starting_m_numElem;
+      }else{
+         lzetam[i] = i+starting_m_numElem-edgeElems*edgeElems ;
+      }
+
+      if (i+starting_m_numElem >= g_numElem-edgeElems*edgeElems){
+         lzetap[i] = i+starting_m_numElem;
+      }else{
+         lzetap[i] = i+starting_m_numElem+edgeElems*edgeElems ;
+      }
    }
+
+   //REMOVE THIS
+   // g_lxim[0] = 0 ;
+   // for (int i=1; i<g_numElem; ++i) {
+   //    g_lxim[i]   = i-1 ;
+   //    g_lxip[i-1] = i ;
+   // }
+   // g_lxip[g_numElem-1] = g_numElem-1 ;
+
+   // for (int i=0; i<edgeElems; ++i) {
+   //    g_letam[i] = i ; 
+   //    g_letap[g_numElem-edgeElems+i] = g_numElem-edgeElems+i ;
+   // }
+
+   // for (int i=edgeElems; i<g_numElem; ++i) {
+   //    g_letam[i] = i-edgeElems ;
+   //    g_letap[i-edgeElems] = i ;
+   // }
+
+   // for (int i=0; i<edgeElems*edgeElems; ++i) {
+   //    g_lzetam[i] = i ;
+   //    g_lzetap[g_numElem-edgeElems*edgeElems+i] = g_numElem-edgeElems*edgeElems+i ;
+   // }
+   // for (int i=edgeElems*edgeElems; i<g_numElem; ++i) {
+   //    g_lzetam[i] = i - edgeElems*edgeElems ;
+   //    g_lzetap[i-edgeElems*edgeElems] = i ;
+   // }
+
+
+
+
+
+
+
+
+
    //! End Selem Connectivity Function
+   printf("HERE NOW 3.7\n");
 
    //! Setup Boundary Conditions Function !HERE
    // set up boundary condition information
    int ghostIdx[6] ;  // offsets to ghost locations
+
+   //New version
    for (int i=0; i<m_numElem; ++i) {
       elemBC[i] = int(0) ;
    }
-     for (int i=0; i<6; ++i) {
-    ghostIdx[i] = INT_MIN ;
-  }
-
-  int pidx = m_numElem ;
-  if (planeMin != 0) {
-    ghostIdx[0] = pidx ;
-    pidx += sizeX*sizeY ;
-  }
-
-  if (planeMax != 0) {
-    ghostIdx[1] = pidx ;
-    pidx += sizeX*sizeY ;
-  }
-
-  if (rowMin != 0) {
-    ghostIdx[2] = pidx ;
-    pidx += sizeX*sizeZ ;
-  }
-
-  if (rowMax != 0) {
-    ghostIdx[3] = pidx ;
-    pidx += sizeX*sizeZ ;
-  }
-
-  if (colMin != 0) {
-    ghostIdx[4] = pidx ;
-    pidx += sizeY*sizeZ ;
-  }
-
-  if (colMax != 0) {
-    ghostIdx[5] = pidx ;
-  }
-  // symmetry plane or free surface BCs 
-  for (int i=0; i<edgeElems; ++i) {
-
-   int planeInc = i*edgeElems*edgeElems ;
-   int rowInc   = i*edgeElems ;
-   for (int j=0; j<edgeElems; ++j) {
-      if (planeLoc == 0) {
-	      elemBC[rowInc+j] |= ZETA_M_SYMM ;
-      }
-      else {
-	      elemBC[rowInc+j] |= ZETA_M_COMM ;
-	      lzetam[rowInc+j] = ghostIdx[0] + rowInc + j ;
-      }
-      if (planeLoc == tp-1) {
-	      elemBC[rowInc+j+m_numElem-edgeElems*edgeElems] |= ZETA_P_FREE;
-      }
-      else {
-	      elemBC[rowInc+j+m_numElem-edgeElems*edgeElems] |= ZETA_P_COMM ;
-	      lzetap[rowInc+j+m_numElem-edgeElems*edgeElems] = ghostIdx[1] + rowInc + j ;
-      }
-      if (rowLoc == 0) {
-	      elemBC[planeInc+j] |= ETA_M_SYMM ;
-      }
-      else {
-	      elemBC[planeInc+j] |= ETA_M_COMM ;
-	      letam[planeInc+j] = ghostIdx[2] + rowInc + j ;
-      }
-      if (rowLoc == tp-1) {
-	      elemBC[planeInc+j+edgeElems*edgeElems-edgeElems] |= ETA_P_FREE ;
-      }
-      else {
-	      elemBC[planeInc+j+edgeElems*edgeElems-edgeElems] |=  ETA_P_COMM ;
-	      letap[planeInc+j+edgeElems*edgeElems-edgeElems] = ghostIdx[3] +  rowInc + j ;
-      }
-      if (colLoc == 0) {
-	      elemBC[planeInc+j*edgeElems] |= XI_M_SYMM ;
-      }
-      else {
-	      elemBC[planeInc+j*edgeElems] |= XI_M_COMM ;
-	      lxim[planeInc+j*edgeElems] = ghostIdx[4] + rowInc + j ;
-      }
-
-      if (colLoc == tp-1) {
-	      elemBC[planeInc+j*edgeElems+edgeElems-1] |= XI_P_FREE ;
-      }
-      else {
-	      elemBC[planeInc+j*edgeElems+edgeElems-1] |= XI_P_COMM ;
-	      lxip[planeInc+j*edgeElems+edgeElems-1] = ghostIdx[5] + rowInc + j ;
-      }
-    }
+   for (int i=0; i<6; ++i) {
+      ghostIdx[i] = INT_MIN ;
    }
+
+   int pidx = g_numElem ;
+   if (planeMin != 0) {
+      ghostIdx[0] = pidx ;
+      pidx += g_sizeX*g_sizeY ;
+   }
+   if (planeMax != 0) {
+      ghostIdx[1] = pidx ;
+      pidx += g_sizeX*g_sizeY ;
+   }
+   if (rowMin != 0) {
+      ghostIdx[2] = pidx ;
+      pidx += g_sizeX*g_sizeZ ;
+   }
+   if (rowMax != 0) {
+      ghostIdx[3] = pidx ;
+      pidx += g_sizeX*g_sizeZ ;
+   }
+   if (colMin != 0) {
+      ghostIdx[4] = pidx ;
+      pidx += g_sizeY*g_sizeZ ;
+   } 
+   if (colMax != 0) {
+      ghostIdx[5] = pidx ;
+   }
+
+   //OLD version
+   // for (int i=0; i<g_numElem; ++i) {
+   //    g_elemBC[i] = int(0) ;
+   // }
+   // for (int i=0; i<6; ++i) {
+   //    ghostIdx[i] = INT_MIN ;
+   // }
+   // int pidx = g_numElem ;
+   // if (planeMin != 0) {
+   //    ghostIdx[0] = pidx ;
+   //    pidx += g_sizeX*g_sizeY ;
+   // }
+   // if (planeMax != 0) {
+   //    ghostIdx[1] = pidx ;
+   //    pidx += g_sizeX*g_sizeY ;
+   // }
+   // if (rowMin != 0) {
+   //    ghostIdx[2] = pidx ;
+   //    pidx += g_sizeX*g_sizeZ ;
+   // }
+   //   if (rowMax != 0) {
+   //     ghostIdx[3] = pidx ;
+   //     pidx += g_sizeX*g_sizeZ ;
+   //   }
+   //   if (colMin != 0) {
+   //     ghostIdx[4] = pidx ;
+   //     pidx += g_sizeY*g_sizeZ ;
+   //   }
+   //   if (colMax != 0) {
+   //     ghostIdx[5] = pidx ;
+   //   }
+
+   for (int i=0; i<edgeElems; ++i) {
+
+      int planeInc = i*edgeElems*edgeElems ;
+      int rowInc   = i*edgeElems ;
+      for (int j=0; j<edgeElems; ++j) {
+         if (planeLoc == 0) {
+            if ( (rowInc+j) >=starting_m_numElem && (rowInc+j)<starting_m_numElem+m_numElem ){
+               elemBC[rowInc+j-starting_m_numElem] |= ZETA_M_SYMM ;
+            }
+         }
+         else {
+            if ( (rowInc+j) >=starting_m_numElem && (rowInc+j)<starting_m_numElem+m_numElem ){
+               elemBC[rowInc+j-starting_m_numElem] |= ZETA_M_COMM ;
+               lzetam[rowInc+j-starting_m_numElem] = ghostIdx[0] + rowInc + j ;
+            }
+         }
+
+         if (planeLoc == tp-1) {
+            if ( (rowInc+j+g_numElem-edgeElems*edgeElems) >=starting_m_numElem && (rowInc+j+m_numElem-edgeElems*edgeElems)<starting_m_numElem+m_numElem ){
+               elemBC[rowInc+j+g_numElem-edgeElems*edgeElems-starting_m_numElem] |= ZETA_P_FREE;
+            }
+         }
+         else {
+            if ( (rowInc+j+g_numElem-edgeElems*edgeElems) >=starting_m_numElem && (rowInc+j+g_numElem-edgeElems*edgeElems)<starting_m_numElem+m_numElem ){
+               elemBC[rowInc+j+g_numElem-edgeElems*edgeElems-starting_m_numElem] |= ZETA_P_COMM ;
+               lzetap[rowInc+j+g_numElem-edgeElems*edgeElems-starting_m_numElem] = ghostIdx[1] + rowInc + j ;
+            }
+         }
+         if (rowLoc == 0) {
+            if ( (planeInc+j) >=starting_m_numElem && (planeInc+j)<starting_m_numElem+m_numElem ){
+               elemBC[planeInc+j-starting_m_numElem] |= ETA_M_SYMM ;
+            }
+         }
+
+         else {
+            if ( (planeInc+j) >=starting_m_numElem && (planeInc+j)<starting_m_numElem+m_numElem ){
+               elemBC[planeInc+j-starting_m_numElem] |= ETA_M_COMM ;
+               letam[planeInc+j-starting_m_numElem] = ghostIdx[2] + rowInc + j ;
+            }
+         }
+         if (rowLoc == tp-1) {
+            if ( (planeInc+j+edgeElems*edgeElems-edgeElems) >=starting_m_numElem && (planeInc+j+edgeElems*edgeElems-edgeElems)<starting_m_numElem+m_numElem ){
+               elemBC[planeInc+j+edgeElems*edgeElems-edgeElems-starting_m_numElem] |= ETA_P_FREE ;
+            }
+         }
+         else {
+            if ( (planeInc+j+edgeElems*edgeElems-edgeElems) >=starting_m_numElem && (planeInc+j+edgeElems*edgeElems-edgeElems)<starting_m_numElem+m_numElem ){
+               elemBC[planeInc+j+edgeElems*edgeElems-edgeElems-starting_m_numElem] |=  ETA_P_COMM ;
+               letap[planeInc+j+edgeElems*edgeElems-edgeElems-starting_m_numElem] = ghostIdx[3] +  rowInc + j ;
+            }
+         }
+
+         if (colLoc == 0) {
+            if ( (planeInc+j*edgeElems) >=starting_m_numElem && (planeInc+j*edgeElems)<starting_m_numElem+m_numElem ){
+               elemBC[planeInc+j*edgeElems-starting_m_numElem] |= XI_M_SYMM ;
+            }
+         }
+         else {
+            if ( (planeInc+j*edgeElems) >=starting_m_numElem && (planeInc+j*edgeElems)<starting_m_numElem+m_numElem ){
+               elemBC[planeInc+j*edgeElems-starting_m_numElem] |= XI_M_COMM ;
+               lxim[planeInc+j*edgeElems-starting_m_numElem] = ghostIdx[4] + rowInc + j ;
+            }
+         }
+
+         if (colLoc == tp-1) {
+            if ( (planeInc+j*edgeElems+edgeElems-1) >=starting_m_numElem && (planeInc+j*edgeElems+edgeElems-1)<starting_m_numElem+m_numElem ){
+               elemBC[planeInc+j*edgeElems+edgeElems-1-starting_m_numElem] |= XI_P_FREE ;
+            }
+         }
+         else {
+            if ( (planeInc+j*edgeElems+edgeElems-1) >=starting_m_numElem && (planeInc+j*edgeElems+edgeElems-1)<starting_m_numElem+m_numElem ){
+               elemBC[planeInc+j*edgeElems+edgeElems-1-starting_m_numElem] |= XI_P_COMM ;
+               lxip[planeInc+j*edgeElems+edgeElems-1-starting_m_numElem] = ghostIdx[5] + rowInc + j ;
+            }
+         }
+      }
+   }
+
+  // symmetry plane or free surface BCs 
+//   for (int i=0; i<edgeElems; ++i) {
+
+//    int planeInc = i*edgeElems*edgeElems ;
+//    int rowInc   = i*edgeElems ;
+//    for (int j=0; j<edgeElems; ++j) {
+//       if (planeLoc == 0) {
+// 	      g_elemBC[rowInc+j] |= ZETA_M_SYMM ;
+//       }
+//       else {
+// 	      g_elemBC[rowInc+j] |= ZETA_M_COMM ;
+// 	      g_lzetam[rowInc+j] = ghostIdx[0] + rowInc + j ;
+//       }
+//       if (planeLoc == tp-1) {
+// 	      g_elemBC[rowInc+j+m_numElem-edgeElems*edgeElems] |= ZETA_P_FREE;
+//       }
+//       else {
+// 	      g_elemBC[rowInc+j+m_numElem-edgeElems*edgeElems] |= ZETA_P_COMM ;
+// 	      g_lzetap[rowInc+j+m_numElem-edgeElems*edgeElems] = ghostIdx[1] + rowInc + j ;
+//       }
+//       if (rowLoc == 0) {
+// 	      g_elemBC[planeInc+j] |= ETA_M_SYMM ;
+//       }
+//       else {
+// 	      g_elemBC[planeInc+j] |= ETA_M_COMM ;
+// 	      g_letam[planeInc+j] = ghostIdx[2] + rowInc + j ;
+//       }
+//       if (rowLoc == tp-1) {
+// 	      g_elemBC[planeInc+j+edgeElems*edgeElems-edgeElems] |= ETA_P_FREE ;
+//       }
+//       else {
+// 	      g_elemBC[planeInc+j+edgeElems*edgeElems-edgeElems] |=  ETA_P_COMM ;
+// 	      g_letap[planeInc+j+edgeElems*edgeElems-edgeElems] = ghostIdx[3] +  rowInc + j ;
+//       }
+//       if (colLoc == 0) {
+// 	      g_elemBC[planeInc+j*edgeElems] |= XI_M_SYMM ;
+//       }
+//       else {
+// 	      g_elemBC[planeInc+j*edgeElems] |= XI_M_COMM ;
+// 	      g_lxim[planeInc+j*edgeElems] = ghostIdx[4] + rowInc + j ;
+//       }
+
+//       if (colLoc == tp-1) {
+//          printf("COLLLOC IS HERE %d %d\n",colLoc,planeInc+j*edgeElems+edgeElems-1);
+// 	      g_elemBC[planeInc+j*edgeElems+edgeElems-1] |= XI_P_FREE ;
+//       }
+//       else {
+//          printf("COLLLOC IS NOW HERE %d %d %d\n",colLoc,tp,tp-1);
+// 	      g_elemBC[planeInc+j*edgeElems+edgeElems-1] |= XI_P_COMM ;
+// 	      g_lxip[planeInc+j*edgeElems+edgeElems-1] = ghostIdx[5] + rowInc + j ;
+//       }
+//     }
+//    }
+//    for (int i=0; i<g_numElem; i++){
+//       printf("%d?%d) %d %d %d %d %d %d %d \n" ,myRank,i,g_elemBC[i],g_lxip[i],g_lxim[i],g_letap[i],g_letam[i],g_lzetap[i],g_lzetam[i]);
+//    }
+
    //! End SetupBC Function
+   printf("HERE NOW 3.8\n");
 
    // Setup defaults
 
@@ -957,45 +1447,273 @@ void initialise(int colLoc,
    m_dtmax     = double(1.0e-2) ;
    m_time    = double(0.) ;
    m_cycle   = int(0) ;
+   
+   printf("HERE NOW 3.9\n");
 
+
+
+   //! Difficult
    // initialize field data 
    for (int i=0; i<m_numElem; ++i) {
+
       double x_local[8], y_local[8], z_local[8] ;
-      int *elemToNode = &nodelist[i*int(8)] ;
+      int *m_elemToNode = &nodelist[i*int(8)] ;
+
       for( int lnode=0 ; lnode<8 ; ++lnode )
       {
-        int gnode = elemToNode[lnode];
-        x_local[lnode] = x[gnode];
-        y_local[lnode] = y[gnode];
-        z_local[lnode] = z[gnode];
+        int gnode = m_elemToNode[lnode];
+        get_loc_from_index(edgeNodes,edgeNodes,edgeNodes,gnode, &curr_x, &curr_y, &curr_z);
+
+        x_local[lnode] = double(1.125)*double(curr_x)/double(meshEdgeElems);
+        y_local[lnode] = double(1.125)*double(curr_y)/double(meshEdgeElems);
+        z_local[lnode] = double(1.125)*double(curr_z)/double(meshEdgeElems);
       }
 
       // volume calculations
       double volume = CalcElemVolume(x_local, y_local, z_local );
+
       volo[i] = volume ;
       elemMass[i] = volume ;
+
+      //! Difficult
+      // int get_rank_from_index(int index, int global_size, int number_of_ranks){
+      //MPI send and recv usign the indexes as tags
+
+
+      //On 100
+      // 0?994) 1.423828e-03
+      // 0?995) 1.423828e-03
+      // 0?996) 1.423828e-03
+      // 0?997) 1.423828e-03
+      // 0?998) 1.423828e-03
+      // 0?999) 1.423828e-03
+      // for (int j=0; j<8; ++j) {
+      //    int idx = m_elemToNode[j] ;
+      //    nodalMass[idx] += volume / double(8.0) ;
+      // }
+
+      // for (int j=0; j<8; ++j) {
+      //    int idx = m_elemToNode[j] ;
+      //    if (  idx < starting_m_numElem || idx>=starting_m_numElem+m_numElem){
+      //       int send_ID = get_rank_from_index(idx,g_numNode,numRanks);
+      //       MPI_Send(&volume,1,MPI_DOUBLE,send_ID,idx,MPI_COMM_WORLD);
+      //    }  
+      // }
+   }
+   printf("HERE NOW 3.20\n");
+
+   for (int i=0; i<m_numElem; ++i) {
+      int *m_elemToNode = &nodelist[i*int(8)] ;
       for (int j=0; j<8; ++j) {
-         int idx = elemToNode[j] ;
-         nodalMass[idx] += volume / double(8.0) ;
+         int idx = m_elemToNode[j] ;
+         int send_ID = get_rank_from_index(idx,g_numNode,numRanks);
+
+         if (send_ID==myRank){
+            nodalMass[idx-starting_m_numNode]+=volo[i]/double(8.0);
+         }else{
+            MPI_Send(&volo[i],1,MPI_DOUBLE,send_ID,idx,MPI_COMM_WORLD);
+         }
       }
    }
+   printf("HERE NOW 3.21\n");
 
-   op_printf("Voume at 0: %d, Nodal Mass: %d", volo[0], nodalMass[0]);
+   //!investigate this and how it can be done better
+   MPI_Barrier(MPI_COMM_WORLD);
+   sleep(1);
+   MPI_Barrier(MPI_COMM_WORLD);
+
+   for (int i=0; i<m_numNode; ++i){
+      for (int j=0; j<8; ++j) {
+         int tag = i+starting_m_numNode;
+         int flag;
+         MPI_Iprobe( MPI_ANY_SOURCE , tag, MPI_COMM_WORLD , &flag, MPI_STATUS_IGNORE );
+         double other_volume;
+         if (flag){
+            MPI_Recv(&other_volume,1,MPI_DOUBLE,MPI_ANY_SOURCE,tag,MPI_COMM_WORLD,MPI_STATUS_IGNORE );
+            nodalMass[i]+=other_volume/double(8.0);
+         }
+      }
+   //    // nodalMass[i] += volo[i] / double(8.0) ;
+   }
+   //! Difficult
+
+   // //! Difficult
+
+   op_printf("Voume at 0: %e, Nodal Mass: %e\n", volo[0], nodalMass[0]);
+   printf("HERE NOW 3.11\n");
 
    // deposit initial energy
    // An energy of 3.948746e+7 is correct for a problem with
    // 45 zones along a side - we need to scale it
-   const double ebase = double(3.948746e+7);
-   double scale = (nx * tp)/double(45.0);
-   double einit = ebase*scale*scale*scale;
-   if (rowLoc + colLoc + planeLoc == 0) {
-      // Dump into the first zone (which we know is in the corner)
-      // of the domain that sits at the origin
-      e[0] = einit;
+   if (myRank==0){
+      const double ebase = double(3.948746e+7);
+      double scale = (nx * tp)/double(45.0);
+      double einit = ebase*scale*scale*scale;
+      if (rowLoc + colLoc + planeLoc == 0) {
+         // Dump into the first zone (which we know is in the corner)
+         // of the domain that sits at the origin
+         e[0] = einit;
+      }
+      m_deltatime = (double(.5)*cbrt(volo[0]))/sqrt(double(2.0)*einit);
    }
-   m_deltatime = (double(.5)*cbrt(volo[0]))/sqrt(double(2.0)*einit);
+   printf("HERE NOW 3.12\n");
+
+   //! restore
+   for (int i = 0; i < m_numNode; i++)
+   {
+      loc[3*i]=x[i];
+      loc[3*i +1]=y[i];
+      loc[3*i +2]=z[i];
+   }
+
+   printf("HERE NOW 3.13\n");
 }
 
+
+
+static void scatter_double_array(double *g_array, double *l_array,
+                                 int comm_size, int g_size, int l_size,
+                                 int elem_size) {
+  int *sendcnts = (int *)malloc(comm_size * sizeof(int));
+  int *displs = (int *)malloc(comm_size * sizeof(int));
+  int disp = 0;
+
+  for (int i = 0; i < comm_size; i++) {
+    sendcnts[i] = elem_size * compute_local_size(g_size, comm_size, i);
+  }
+  for (int i = 0; i < comm_size; i++) {
+    displs[i] = disp;
+    disp = disp + sendcnts[i];
+  }
+
+  MPI_Scatterv(g_array, sendcnts, displs, MPI_DOUBLE, l_array,
+               l_size * elem_size, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+
+  free(sendcnts);
+  free(displs);
+}
+
+static void scatter_int_array(int *g_array, int *l_array, int comm_size,
+                              int g_size, int l_size, int elem_size) {
+  int *sendcnts = (int *)malloc(comm_size * sizeof(int));
+  int *displs = (int *)malloc(comm_size * sizeof(int));
+  int disp = 0;
+
+  for (int i = 0; i < comm_size; i++) {
+    sendcnts[i] = elem_size * compute_local_size(g_size, comm_size, i);
+  }
+  for (int i = 0; i < comm_size; i++) {
+    displs[i] = disp;
+    disp = disp + sendcnts[i];
+  }
+
+  MPI_Scatterv(g_array, sendcnts, displs, MPI_INT, l_array, l_size * elem_size,
+               MPI_INT, 0, MPI_COMM_WORLD);
+
+  free(sendcnts);
+  free(displs);
+}
+
+static inline
+void distributeGlobalElems(int comm_size, int g_numElem , int numElem, int g_numNode, int numNode){
+   //Element Information
+
+   // g_nodelist = (int*) malloc(g_numElem*8 * sizeof(int));
+   // g_lxim = (int*) malloc(g_numElem * sizeof(int));
+   // g_lxip = (int*) malloc(g_numElem * sizeof(int));
+   // g_letam = (int*) malloc(g_numElem * sizeof(int));
+   // g_letap = (int*) malloc(g_numElem * sizeof(int));
+   // g_lzetam = (int*) malloc(g_numElem * sizeof(int));
+   // g_lzetap = (int*) malloc(g_numElem * sizeof(int));
+   // g_elemBC = (int*) malloc(g_numElem * sizeof(int));
+   scatter_int_array(g_nodelist,nodelist,comm_size,g_numElem,numElem,8);
+   scatter_int_array(g_lxim,lxim,comm_size,g_numElem,numElem,1);
+   scatter_int_array(g_lxip,lxip,comm_size,g_numElem,numElem,1);
+   scatter_int_array(g_letam,letam,comm_size,g_numElem,numElem,1);
+   scatter_int_array(g_letap,letap,comm_size,g_numElem,numElem,1);
+   scatter_int_array(g_lzetam,lzetam,comm_size,g_numElem,numElem,1);
+   scatter_int_array(g_lzetap,lzetap,comm_size,g_numElem,numElem,1);
+   scatter_int_array(g_elemBC,elemBC,comm_size,g_numElem,numElem,1);
+   free(g_nodelist);
+   free(g_lxim);
+   free(g_lxip);
+   free(g_letam);
+   free(g_letap);
+   free(g_lzetam);
+   free(g_lzetap);
+   free(g_elemBC);
+
+   // g_e = (double*) malloc(g_numElem * sizeof(double));
+   // g_p = (double*) malloc(g_numElem * sizeof(double));
+   // g_q = (double*) malloc(g_numElem * sizeof(double));
+   // g_v = (double*) malloc(g_numElem * sizeof(double));
+   // g_volo = (double*) malloc(g_numElem * sizeof(double));
+   // g_ss = (double*) malloc(g_numElem * sizeof(double));
+   // g_elemMass = (double*) malloc(g_numElem * sizeof(double));
+   scatter_double_array(g_e,e,comm_size,g_numElem,numElem,1);
+   scatter_double_array(g_p,p,comm_size,g_numElem,numElem,1);
+   scatter_double_array(g_q,q,comm_size,g_numElem,numElem,1);
+   scatter_double_array(g_v,v,comm_size,g_numElem,numElem,1);
+   scatter_double_array(g_volo,volo,comm_size,g_numElem,numElem,1);
+   scatter_double_array(g_ss,ss,comm_size,g_numElem,numElem,1);
+   scatter_double_array(g_elemMass,elemMass,comm_size,g_numElem,numElem,1);
+   free(g_e);
+   free(g_p);
+   free(g_q);
+   free(g_v);
+   free(g_volo);
+   free(g_ss);
+   free(g_elemMass);
+
+   //Node Information
+   // g_t_symmX = (int*) malloc(g_numNode * sizeof(int));
+   // g_t_symmY = (int*) malloc(g_numNode * sizeof(int));
+   // g_t_symmZ = (int*) malloc(g_numNode * sizeof(int));
+
+   scatter_int_array(g_t_symmX,t_symmX,comm_size,g_numNode,numNode,1);
+   scatter_int_array(g_t_symmY,t_symmY,comm_size,g_numNode,numNode,1);
+   scatter_int_array(g_t_symmZ,t_symmZ,comm_size,g_numNode,numNode,1);
+   free(g_t_symmX);
+   free(g_t_symmY);
+   free(g_t_symmZ);
+
+   // g_x = (double*) malloc(g_numNode * sizeof(double)); // Coordinates
+   // g_y = (double*) malloc(g_numNode * sizeof(double));
+   // g_z = (double*) malloc(g_numNode * sizeof(double));
+
+   // g_xd = (double*) malloc(g_numNode * sizeof(double)); // Velocities
+   // g_yd = (double*) malloc(g_numNode * sizeof(double));
+   // g_zd = (double*) malloc(g_numNode * sizeof(double));
+
+   // g_xdd = (double*) malloc(g_numNode * sizeof(double)); //Accelerations
+   // g_ydd = (double*) malloc(g_numNode * sizeof(double));
+   // g_zdd = (double*) malloc(g_numNode * sizeof(double));
+
+   // g_nodalMass = (double*) malloc(g_numNode * sizeof(double));  // mass
+   scatter_double_array(g_x,x,comm_size,g_numNode,numNode,1);
+   scatter_double_array(g_y,y,comm_size,g_numNode,numNode,1);
+   scatter_double_array(g_z,z,comm_size,g_numNode,numNode,1);
+   scatter_double_array(g_loc,loc,comm_size,g_numNode,numNode,3);
+   free(g_x);
+   free(g_y);
+   free(g_z);
+   free(g_loc);
+
+   scatter_double_array(g_xd,xd,comm_size,g_numNode,numNode,1);
+   scatter_double_array(g_yd,yd,comm_size,g_numNode,numNode,1);
+   scatter_double_array(g_zd,zd,comm_size,g_numNode,numNode,1);
+   scatter_double_array(g_xdd,xdd,comm_size,g_numNode,numNode,1);
+   scatter_double_array(g_ydd,ydd,comm_size,g_numNode,numNode,1);
+   scatter_double_array(g_zdd,zdd,comm_size,g_numNode,numNode,1);
+   scatter_double_array(g_nodalMass,nodalMass,comm_size,g_numNode,numNode,1);
+   free(g_xd);
+   free(g_yd);
+   free(g_zd);
+   free(g_xdd);
+   free(g_ydd);
+   free(g_zdd);
+   free(g_nodalMass);
+}
 
 static inline
 void initOp2Vars(){
@@ -1020,6 +1738,7 @@ void initOp2Vars(){
    p_x = op_decl_dat(nodes, 1, "double", x, "p_x");
    p_y = op_decl_dat(nodes, 1, "double", y, "p_y");
    p_z = op_decl_dat(nodes, 1, "double", z, "p_z");
+   p_loc = op_decl_dat(nodes, 3, "double", loc, "p_loc");
    p_xd = op_decl_dat(nodes, 1, "double", xd, "p_xd");
    p_yd = op_decl_dat(nodes, 1, "double", yd, "p_yd");
    p_zd = op_decl_dat(nodes, 1, "double", zd, "p_zd");
@@ -1542,10 +2261,9 @@ void readAndInitVars(char* file){
 /* Work Routines */
 
 static inline
-void TimeIncrement()
+void TimeIncrement(int myrank)
 {
    double targetdt = m_stoptime - m_time ;
-
    if ((m_dtfixed <= double(0.0)) && (m_cycle != int(0))) {
       double ratio ;
       double olddt = m_deltatime ;
@@ -1572,11 +2290,11 @@ void TimeIncrement()
             newdt = olddt*m_deltatimemultub ;
          }
       }
-
       if (newdt > m_dtmax) {
          newdt = m_dtmax ;
       }
       m_deltatime = newdt ;
+
    }
 
    /* TRY TO PREVENT VERY SMALL SCALING ON THE NEXT CYCLE */
@@ -2207,8 +2925,6 @@ void EvalEOSForElems(double *vnewc,
    //loop to add load imbalance based on region number 
    for(int j = 0; j < rep; j++) {
       /* compress data, minimal set */
-// #pragma omp parallel
-      // {
 
          op_par_loop(CopyEOSValsIntoArray, "CopyEOSValsIntoArray", elems,
                      op_arg_dat(p_e_old, -1, OP_ID, 1, "double", OP_WRITE), op_arg_dat(p_e, -1, OP_ID, 1, "double", OP_READ),
@@ -2247,7 +2963,6 @@ void EvalEOSForElems(double *vnewc,
          op_par_loop(CalcEOSWork, "CalcEOSWork", elems,
                      op_arg_dat(p_work, -1, OP_ID, 1 , "double", OP_WRITE));
 
-      // }
       CalcEnergyForElems(p_new, e_new, q_new, bvc, pbvc,
                          p_old, e_old,  q_old, compression, compHalfStep,
                          vnewc, work,  delvc, pmin,
@@ -2358,8 +3073,8 @@ void LagrangeElements()
   CalcLagrangeElements() ;
 
   /* Calculate Q.  (Monotonic q option requires communication) */
-//   MPI_Barrier(MPI_COMM_WORLD);
-//   op_print("Q For Elems");
+   //   MPI_Barrier(MPI_COMM_WORLD);
+   //   op_print("Q For Elems");
   CalcQForElems() ;
 
    // MPI_Barrier(MPI_COMM_WORLD);
@@ -2376,7 +3091,6 @@ void LagrangeElements()
 static inline
 void CalcCourantConstraintForElems()
 {
-
   
    op_par_loop(CalcCourantConstraint, "CalcCourantConstraint", elems,
                op_arg_dat(p_ss, -1, OP_ID, 1, "double", OP_READ),
@@ -2384,6 +3098,7 @@ void CalcCourantConstraintForElems()
                op_arg_dat(p_arealg, -1, OP_ID, 1, "double", OP_READ),
                op_arg_gbl(&m_dtcourant, 1, "double", OP_MIN)
    );
+
    return ;
 
 }
@@ -2417,6 +3132,8 @@ void CalcTimeConstraintsForElems() {
 
       /* check hydro constraint */
       CalcHydroConstraintForElems() ;
+
+
    }
 }
 
@@ -2425,7 +3142,6 @@ void CalcTimeConstraintsForElems() {
 static inline
 void LagrangeLeapFrog()
 {
-
    /* calculate nodal forces, accelerations, velocities, positions, with
     * applied boundary conditions and slide surface considerations */
    // op_print("Nodal");
@@ -2438,7 +3154,7 @@ void LagrangeLeapFrog()
    // MPI_Barrier(MPI_COMM_WORLD);
    // op_print("Elements");
    LagrangeElements();
- 
+  
    CalcTimeConstraintsForElems();
 }
 
@@ -2740,8 +3456,8 @@ int main(int argc, char *argv[])
 
    int numRanks ;
 
-std::cout << "CHENCK THAT STUFF IS PRINTING\n";
-   std::cout << "USING MPI HERE JUST TO BE SURE\n";
+// std::cout << "CHENCK THAT STUFF IS PRINTING\n";
+//    std::cout << "USING MPI HERE JUST TO BE SURE\n";
 
    MPI_Comm_size(MPI_COMM_WORLD, &numRanks) ;
    MPI_Comm_rank(MPI_COMM_WORLD, &myRank) ;
@@ -2757,6 +3473,7 @@ std::cout << "CHENCK THAT STUFF IS PRINTING\n";
    opts.balance = 1;
    opts.cost = 1;
    opts.itert = 1;
+   m_numReg = 1;
 
 
    ParseCommandLineOptions(argc, argv, myRank, &opts);
@@ -2767,7 +3484,7 @@ std::cout << "CHENCK THAT STUFF IS PRINTING\n";
 #if _OPENMP
       std::cout << "Num threads: " << omp_get_max_threads() << "\n";
 #endif
-      std::cout << "Total number of elements: " << ((Int8_t)numRanks*opts.nx*opts.nx*opts.nx) << " \n\n";
+      std::cout << "Total number of elements: " << (opts.nx*opts.nx*opts.nx) << " \n\n";
       std::cout << "To run other sizes, use -s <integer>.\n";
       std::cout << "To run a fixed number of iterations, use -i <integer>.\n";
       std::cout << "To run a more or less balanced region set, use -b <integer>.\n";
@@ -2779,7 +3496,7 @@ std::cout << "CHENCK THAT STUFF IS PRINTING\n";
 
    // Set up the mesh and decompose. Assumes regular cubes for now
    int col, row, plane, side;
-   InitMeshDecomp(numRanks, myRank, &col, &row, &plane, &side);
+   // InitMeshDecomp(numRanks, myRank, &col, &row, &plane, &side);
 
 
    //locDom
@@ -2792,9 +3509,54 @@ std::cout << "CHENCK THAT STUFF IS PRINTING\n";
    m_numElem = edgeElems * edgeElems * edgeElems;
    m_numNode = edgeNodes * edgeNodes * edgeNodes;
 
+
+   //generate the global size
+   g_numElem = opts.nx*opts.nx*opts.nx;
+   g_numNode = (opts.nx+1)*(opts.nx+1)*(opts.nx+1);
+
+   printf("DEBUG HELP:m_numNode:%d,g_numNode:%d\n",m_numNode,g_numNode);
+
+
+   // if (myRank == 0){
+   //    printf("HERE NOW 1\n");
+
+   //    allocateGlobalElems();
+   //    printf("HERE NOW 2\n");
+   //    allocateGlobalNodes();
+   //    printf("HERE NOW 3\n");
+   // }
+
+
+   printf("initialising\n");
+   m_numElem =  compute_local_size(g_numElem,(Int8_t)numRanks,myRank);
+   m_numNode =  compute_local_size(g_numNode,(Int8_t)numRanks,myRank);
    allocateElems();
+   // printf("HERE NOW 6\n");
    allocateNodes();
-   initialise(col,row,plane,opts.nx,side,opts.numReg,opts.balance, opts.cost);
+   initialise(myRank,opts.nx,1,opts.numReg,opts.balance, opts.cost,(Int8_t)numRanks);
+
+
+
+   printf("HERE NOW 4\n");
+   printf("Done\n");
+
+   MPI_Barrier(MPI_COMM_WORLD);
+
+   printf("HERE NOW 6\n");
+
+
+   MPI_Bcast(&m_deltatime,1,MPI_DOUBLE,0,MPI_COMM_WORLD);
+
+   // printf("HERE NOW 5\n");
+
+   printf("HERE NOW 7\n");
+
+
+   // (int comm_size, int g_numElem , int numElem, int g_numNode, int numNode)
+   // distributeGlobalElems(numRanks,g_numElem,m_numElem,g_numNode,m_numNode);
+
+   MPI_Barrier(MPI_COMM_WORLD);
+
 
    m_dtfixed = double(-1.0e-6) ; // Negative means use courant condition
    m_stoptime  = double(1.0e-2); // *double(edgeElems*tp/45.0) ;
@@ -2875,16 +3637,31 @@ std::cout << "CHENCK THAT STUFF IS PRINTING\n";
    char file[] = FILE_NAME_PATH;
    // readAndInitVars(file);
    // readOp2VarsFromHDF5(file);
+
    initOp2Vars();
    int siz = op_get_size(elems);
    std::cout <<  "Global Size: " << siz << ", Local Elems: " << elems->size << ", Local Nodes: "<< nodes->size << "\n";
 
    op_diagnostic_output();
-   op_partition("BLOCK", "ANY", NULL, NULL, NULL);
+   // op_partition("BLOCK", "ANY", NULL, NULL, NULL);
+   op_partition("PTSCOTCH", "KWAY", nodes, p_nodelist, p_loc);
+
+   printf("Partition Done\n");
 
    // op_dump_to_hdf5("file_out.h5");
    // op_write_const_hdf5("deltatime", 1, "double", (char*)&m_deltatime, FILE_NAME_PATH);
-   // MPI_Barrier(MPI_COMM_WORLD);
+
+   MPI_Barrier(MPI_COMM_WORLD);
+   for (int i = 0; i < m_numNode; i++)
+   {
+
+      double* my_x= (double*)p_x->data;
+      double* my_y= (double*)p_y->data;
+      double* my_z= (double*)p_z->data;
+      printf("LOCATION: !%d!%f!%f!%f\n",myRank,my_x[i],my_y[i],my_z[i]);
+   }
+   MPI_Barrier(MPI_COMM_WORLD);
+
    
    // BEGIN timestep to solution */
    double cpu_t1, cpu_t2, wall_t1, wall_t2;
@@ -2893,21 +3670,26 @@ std::cout << "CHENCK THAT STUFF IS PRINTING\n";
 //   for(int i = 0; i < locDom->numReg(); i++)
 //      std::cout << "region" << i + 1<< "size" << locDom->regElemSize(i) <<std::endl;
 
+   printf("MAIN LOOP\n");
    // !Main Loop
    while((m_time < m_stoptime) && (m_cycle < opts.its)) {
       // op_print("Incrment");
-      TimeIncrement() ;
+      TimeIncrement(myRank) ;
       // op_print("Leapfrog");
+
       LagrangeLeapFrog() ;
 
-      if ((opts.showProg != 0) && (opts.quiet == 0) && (myRank == 0)) {
-         std::cout << "cycle = " << m_cycle       << ", "
+      if ((opts.showProg != 0) && (opts.quiet == 0) && (myRank==0)) {
+         std::cout << "rank = " << myRank       << ", "
+                   << "cycle = " << m_cycle       << ", "
                    << std::scientific
                    << "time = " << double(m_time) << ", "
                    << "dt="     << double(m_deltatime) << "\n";
          std::cout.unsetf(std::ios_base::floatfield);
       }
    }
+   printf("EXIT MAIN LOOP, %d\n",myRank);
+
    op_timers(&cpu_t2, &wall_t2);
    double walltime = wall_t2 - wall_t1;
 
@@ -2920,11 +3702,13 @@ std::cout << "CHENCK THAT STUFF IS PRINTING\n";
    double *verify_e = (double*) malloc(m_numElem*sizeof(double));
    op_fetch_data(p_e, verify_e);
    
+   printf("DONE 2\n");
    if ((myRank == 0) && (opts.quiet == 0)) {
+      printf("DONE \n");
       VerifyAndWriteFinalOutput(walltime, m_cycle, opts.nx, numRanks, verify_e);
    }
 
-   op_timing_output();
+   // op_timing_output();
    op_exit(); 
 
    return 0 ;

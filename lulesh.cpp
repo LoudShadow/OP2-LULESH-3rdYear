@@ -594,6 +594,8 @@ static inline
 void initialise(int colLoc,
                int rowLoc, int planeLoc,
                int nx, int tp, int nr, int balance, int cost){
+
+   printf("%d %d %d %d %d %d\n",colLoc,rowLoc,planeLoc,nx,tp,nr);
    int edgeElems = nx ;
    int edgeNodes = edgeElems+1 ;
 
@@ -603,6 +605,9 @@ void initialise(int colLoc,
    m_numElem = edgeElems * edgeElems * edgeElems;
 
    m_numNode = edgeNodes * edgeNodes * edgeNodes;
+
+   printf("%d %d %d %d %d\n",sizeX,sizeY,sizeZ,m_numElem,m_numNode);
+
 
    m_regNumList = (int*) malloc(m_numElem * sizeof(int));
 
@@ -689,6 +694,7 @@ void initialise(int colLoc,
       }
       nidx += edgeNodes ;
    }
+
    //! End Build Mesh Function
 
    //! Start Create Region Sets
@@ -957,6 +963,13 @@ void initialise(int colLoc,
    m_time    = double(0.) ;
    m_cycle   = int(0) ;
 
+
+   double mytotal =0;
+   for (int i = 0; i < edgeNodes*edgeNodes*edgeNodes; i++)
+   {
+      mytotal+=x[i];
+   }
+
    // initialize field data 
    for (int i=0; i<m_numElem; ++i) {
       double x_local[8], y_local[8], z_local[8] ;
@@ -979,7 +992,8 @@ void initialise(int colLoc,
       }
    }
 
-   op_printf("Voume at 0: %d, Nodal Mass: %d\n", volo[0], nodalMass[0]);
+   op_printf("Seq - Voume at 0: %e, Nodal Mass: %e\n", volo[0], nodalMass[0]);
+   //Voume at 0: 1751786232, Nodal Mass: 1755992080
 
    // deposit initial energy
    // An energy of 3.948746e+7 is correct for a problem with

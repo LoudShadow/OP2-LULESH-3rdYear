@@ -1,4 +1,5 @@
 inline void CalcCourantConstraint(const double *ss, const double *vdov, const double *arealg, double *dtcourant){
+    
     double dtf = ss[0] * ss[0];
 
     if ( vdov[0] < double(0.) ) {

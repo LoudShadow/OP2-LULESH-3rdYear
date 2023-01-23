@@ -176,6 +176,8 @@ Domain::Domain(Int_t numRanks, Index_t colLoc,
          nodalMass(idx) += volume / Real_t(8.0) ;
       }
    }
+    printf("Voume at 0: %d, Nodal Mass: %d\n", volo(i), nodalMass(0));
+
 
    // deposit initial energy
    // An energy of 3.948746e+7 is correct for a problem with
