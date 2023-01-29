@@ -684,6 +684,9 @@ struct cmdLineOpts {
    Int_t cost; // -c
    Int_t balance; // -b
    Int_t itert; // -l
+   Int_t partition; // -t
+   Int_t creation; // -d
+   Int_t time; // -d
    Int_t fnm;
 };
 

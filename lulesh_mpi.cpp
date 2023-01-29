@@ -235,6 +235,19 @@ double  m_ssc_low = double(.3333333e-18);
 #define ZETA_P_FREE 0x10000
 #define ZETA_P_COMM 0x20000
 
+         /* -t partiotioning library <S,PK,PG,PKG,K> */
+#define Partition_PK  4
+#define Partition_S   1
+#define Partition_PG  2
+#define Partition_PGK 3
+#define Partition_K   0
+
+#define Creation_Parallel 0
+#define Creation_Root 1
+
+#define Hide_Time 0
+#define Show_Time 1
+
 // inline double SQRT(double  arg) { return sqrt(arg) ; }
 // inline double CBRT(double  arg) { return cbrt(arg) ; }
 // inline double FABS(double  arg) { return fabs(arg) ; }
@@ -754,6 +767,48 @@ int get_rank_from_index(int index, int global_size, int number_of_ranks){
    return rank;
 }
 
+static inline
+Real_t volumeAt(int elemNumber,int meshEdgeElems,int edgeNodes,int edgeElems){
+   int curr_z,curr_y,curr_x;
+
+   get_loc_from_index(edgeElems,edgeElems,edgeElems,elemNumber, &curr_x, &curr_y, &curr_z);
+   int nidx = (curr_z*edgeElems*edgeElems) 
+         + (curr_y*edgeElems) 
+         + (curr_x) 
+
+         + (curr_y)
+         + (curr_z*edgeElems)
+
+         + (curr_z*edgeNodes);
+   int nodeNumbers[8];
+   nodeNumbers[0] = nidx                                       ;
+   nodeNumbers[1] = nidx                                   + 1 ;
+   nodeNumbers[2] = nidx                       + edgeNodes + 1 ;
+   nodeNumbers[3] = nidx                       + edgeNodes     ;
+   nodeNumbers[4] = nidx + edgeNodes*edgeNodes                 ;
+   nodeNumbers[5] = nidx + edgeNodes*edgeNodes             + 1 ;
+   nodeNumbers[6] = nidx + edgeNodes*edgeNodes + edgeNodes + 1 ;
+   nodeNumbers[7] = nidx + edgeNodes*edgeNodes + edgeNodes     ;
+
+   double x_local[8], y_local[8], z_local[8] ;
+
+   for( int lnode=0 ; lnode<8 ; ++lnode )
+   {
+      int gnode = nodeNumbers[lnode];
+      get_loc_from_index(edgeNodes,edgeNodes,edgeNodes,gnode, &curr_x, &curr_y, &curr_z);
+
+      x_local[lnode] = double(1.125)*double(curr_x)/double(meshEdgeElems);
+      y_local[lnode] = double(1.125)*double(curr_y)/double(meshEdgeElems);
+      z_local[lnode] = double(1.125)*double(curr_z)/double(meshEdgeElems);
+   }
+   // volume calculations
+   return  CalcElemVolume(x_local, y_local, z_local );
+}
+
+static inline
+int calc_Single_Elem_Offset_to_node(int loc_x,int loc_y,int loc_z,int edgeNodes){
+   return (loc_x  ) + (loc_y  )*edgeNodes + (loc_z  )*edgeNodes*edgeNodes -loc_y     -(loc_z  ) -2*(loc_z  * edgeNodes);
+}
 
 
 //initialise using the static data
@@ -785,8 +840,6 @@ void initialise(int myRank,
    int edgeElems = nx ;
    int edgeNodes = edgeElems+1 ;
 
-
-   printf("HERE NOW 3.1\n");
    //! Setup Comm Buffer, Should not be necessary in final app
    rowMin = (rowLoc == 0)        ? 0 : 1;
    rowMax = (rowLoc == tp-1)     ? 0 : 1;
@@ -824,9 +877,6 @@ void initialise(int myRank,
       nodalMass[i] = double(0.0) ;
    }
 
-
-
-   printf("HERE NOW 3.2\n");
    //!Build Mesh function !HERE
 
    // Happy with this
@@ -856,29 +906,6 @@ void initialise(int myRank,
       curr_y=0;
       ++curr_z;
    }
-   
-   // double tz = double(1.125)*double(planeLoc*nx)/double(meshEdgeElems) ;
-   // for (int plane=0; plane<edgeNodes; ++plane) {
-   //    double ty = double(1.125)*double(rowLoc*nx)/double(meshEdgeElems) ;
-   //    for (int row=0; row<edgeNodes; ++row) {
-   //       double tx = double(1.125)*double(colLoc*nx)/double(meshEdgeElems) ;
-   //       for (int col=0; col<edgeNodes; ++col) {
-   //          printf("0? %e %e %e\n",tz,ty,tx);
-   //          g_x[nidx] = tx ;
-   //          g_y[nidx] = ty ;
-   //          g_z[nidx] = tz ;
-   //          ++nidx ;
-   //          // tx += ds ; // may accumulate roundoff... 
-   //          tx = double(1.125)*double(colLoc*nx+col+1)/double(meshEdgeElems) ;
-   //       }
-   //       // ty += ds ;  // may accumulate roundoff... 
-   //       ty = double(1.125)*double(rowLoc*nx+row+1)/double(meshEdgeElems) ;
-   //    }
-   //    // tz += ds ;  // may accumulate roundoff... 
-   //    tz = double(1.125)*double(planeLoc*nx+plane+1)/double(meshEdgeElems) ;
-   // }
-   //NEW Version
-   //genreate new stargin points for each version
    
    //Happy with this for now
    int zidx = 0 ;
@@ -919,42 +946,7 @@ void initialise(int myRank,
       nidx += edgeNodes ;
    }
 
-   //OLD version   
-   // embed hexehedral elements in nodal point lattice 
-
-   // int zidx = 0 ;
-   // nidx = 0 ;
-   // printf("HERE NOW 3.3\n");
-
-   // for (int plane=0; plane<edgeElems; ++plane) {
-   //    for (int row=0; row<edgeElems; ++row) {
-   //       for (int col=0; col<edgeElems; ++col) {
-   //          int *localNode = &g_nodelist[zidx*int(8)] ;
-
-   //          localNode[0] = nidx                                       ;
-   //          localNode[1] = nidx                                   + 1 ;
-   //          localNode[2] = nidx                       + edgeNodes + 1 ;
-   //          localNode[3] = nidx                       + edgeNodes     ;
-   //          localNode[4] = nidx + edgeNodes*edgeNodes                 ;
-   //          localNode[5] = nidx + edgeNodes*edgeNodes             + 1 ;
-   //          localNode[6] = nidx + edgeNodes*edgeNodes + edgeNodes + 1 ;
-   //          localNode[7] = nidx + edgeNodes*edgeNodes + edgeNodes     ;
-   //          ++zidx ;
-   //          ++nidx ;
-   //       }
-   //       ++nidx ;
-   //    }
-   //    nidx += edgeNodes ;
-   // }
-
-   // for (int i=0; i<g_numElem; i++){
-   //    printf("%d? %d\n",myRank,g_nodelist[i*8]);
-
-   // }
-
-
    //! End Build Mesh Function
-   printf("HERE NOW 3.4\n");
 
    //! Start Create Region Sets
    //regions are just not used
@@ -962,135 +954,20 @@ void initialise(int myRank,
    // int myRank = 0;
 
    m_numReg = nr;
-   // m_regNumList = (int*) malloc(m_numElem * sizeof(int));
    m_regElemSize = (int*) malloc(m_numReg * sizeof(int));
    m_regElemlist = (int**) malloc(m_numReg * sizeof(int));
 
-
-   // int nextIndex = 0;
-   // //if we only have one region just fill it
-   // // Fill out the regNumList with material numbers, which are always
-   // // the region index plus one 
-   // if(m_numReg == 1){
-   //    printf("HERE NOW 3.4.1\n");
-
-   //    // while(nextIndex < g_numElem){
-   //    //    m_regNumList[nextIndex] = 1;
-   //    //    nextIndex++;
-   //    // }
-   //    m_regElemSize[0] = 0;
-   
-   // //NOT SUPPORTED
-   // } else {//If we have more than one region distribute the elements.
-   //    printf("HERE NOW 3.4.2\n");
-
-   //    int regionNum;
-   //    int regionVar;
-   //    int lastReg = -1;
-   //    int binSize;
-   //    int elements;
-   //    int runto = 0;
-   //    int costDenominator = 0;
-   //    int* g_regBinEnd = (int*) malloc(m_numReg * sizeof(int));
-   //    //Determine the relative weights of all the regions.  This is based off the -b flag.  Balance is the value passed into b.  
-   //    for(int i=0; i<m_numReg;++i){
-   //       g_m_regElemSize[i] = 0;
-   //       costDenominator += pow((i+1), balance);//Total sum of all regions weights
-   //       g_regBinEnd[i] = costDenominator;  //Chance of hitting a given region is (regBinEnd[i] - regBinEdn[i-1])/costDenominator
-   //    }
-   //    //Until all elements are assigned
-   //    while (nextIndex < m_numElem) {
-   //       //pick the region
-   //       regionVar = rand() % costDenominator;
-   //       int i = 0;
-   //       while(regionVar >= g_regBinEnd[i]) i++;
-   //       //rotate the regions based on MPI rank.  Rotation is Rank % m_numRegions this makes each domain have a different region with 
-   //       //the highest representation
-   //       regionNum = ((i+myRank)% m_numReg) +1;
-   //       while(regionNum == lastReg){
-   //          regionVar = rand() % costDenominator;
-   //          i = 0;
-   //          while(regionVar >= g_regBinEnd[i]) i++;
-   //          regionNum = ((i + myRank) % m_numReg) + 1;
-   //       }
-   //       //Pick the bin size of the region and determine the number of elements.
-   //       binSize = rand() % 1000;
-   //       if(binSize < 773) {
-	//          elements = rand() % 15 + 1;
-	//       }
-	//       else if(binSize < 937) {
-	//          elements = rand() % 16 + 16;
-	//       }
-	//       else if(binSize < 970) {
-	//          elements = rand() % 32 + 32;
-	//       }
-	//       else if(binSize < 974) {
-	//          elements = rand() % 64 + 64;
-	//       } 
-	//       else if(binSize < 978) {
-	//          elements = rand() % 128 + 128;
-	//       }
-	//       else if(binSize < 981) {
-	//          elements = rand() % 256 + 256;
-	//       }
-	//       else
-	//          elements = rand() % 1537 + 512;
-   //       runto = elements + nextIndex;
-	//       //Store the elements.  If we hit the end before we run out of elements then just stop.
-   //       while (nextIndex < runto && nextIndex < m_numElem) {
-	//          g_m_regNumList[nextIndex] = regionNum;
-	//          nextIndex++;
-	//       }
-   //       lastReg = regionNum;
-   //    }
-   //    delete [] g_regBinEnd; 
-   // }
-   // // Convert m_regNumList to region index sets
-   // // First, count size of each region 
-   //    printf("HERE NOW 3.4.3\n");
-
-
-
-
-   // for (int i=0 ; i<g_numElem ; ++i) {
-   //    // int r = g_m_regNumList[i]-1; // region index == regnum-1
-   //    int r= 0
-   //    g_m_regElemSize[r]++;
-   // }
-   // // Second, allocate each region index set
-   // for (int i=0 ; i<m_numReg ; ++i) {
-   //    g_m_regElemlist[i] = (int*) malloc(g_m_regElemSize[i]*sizeof(int));
-   //    g_m_regElemSize[i] = 0;
-   // }
-   //       printf("HERE NOW 3.4.4\n");
-
-   // // Third, fill index sets
-   // for (int i=0 ; i<g_numElem ; ++i) {
-
-   //    // int r = g_m_regNumList[i]-1;       // region index == regnum-1
-   //    int r = 0;       // region index == regnum-1
-   //    int regndx = g_m_regElemSize[r]++; // Note increment
-
-   //    m_regElemlist[r][regndx] = i;
-   // }
-
-
-
    //! End Create Region Sets
-   printf("HERE NOW 3.5\n");
 
    //! Setup Symmetry Planes Function !HERE
 
    for (int i = 0; i<m_numNode;++i){
-   // for (int i = 0; i<m_numNode*3;++i){
       t_symmX[i] |= FREE_NODE; 
       t_symmY[i] |= FREE_NODE;
       t_symmZ[i] |= FREE_NODE;
    }
 
-   //new Version
-   // get_loc_from_index(edgeNodes,edgeNodes,edgeNodes,starting_m_numNode, &curr_x, &curr_y, &curr_z);
-   
+   //new Version   
    nidx = 0 ;
    for (int i=0; i<edgeNodes; ++i) {
       int planeInc = i*edgeNodes*edgeNodes ;
@@ -1098,57 +975,23 @@ void initialise(int myRank,
       for (int j=0; j<edgeNodes; ++j) {
          if (planeLoc == 0) {
             if ( rowInc + j>=starting_m_numNode && rowInc + j<starting_m_numNode+m_numNode ){
-               // symmZ[nidx] = rowInc   + j ;
                t_symmZ[rowInc + j-starting_m_numNode] |= BOUNDARY_NODE;
             }
          }
          if (rowLoc == 0) {
             if ( planeInc + j>=starting_m_numNode && planeInc + j<starting_m_numNode+m_numNode ){
-               // symmY[nidx] = planeInc + j ;
                t_symmY[planeInc+j-starting_m_numNode] |= BOUNDARY_NODE;
             }
          }
          if (colLoc == 0) {
             if ( planeInc + j*edgeNodes>=starting_m_numNode && planeInc + j*edgeNodes<starting_m_numNode+m_numNode ){
-               // symmX[nidx] = planeInc + j*edgeNodes ;
                t_symmX[planeInc + j*edgeNodes-starting_m_numNode] |= BOUNDARY_NODE;
             }
          }
          ++nidx ;
       }
    }
-
-
-
-   //OLD version
-   // nidx = 0 ;
-   // for (int i=0; i<edgeNodes; ++i) {
-   //    int planeInc = i*edgeNodes*edgeNodes ;
-   //    int rowInc   = i*edgeNodes ;
-   //    for (int j=0; j<edgeNodes; ++j) {
-   //       if (planeLoc == 0) {
-   //          // symmZ[nidx] = rowInc   + j ;
-   //          g_t_symmZ[rowInc + j] |= BOUNDARY_NODE;
-   //       }
-   //       if (rowLoc == 0) {
-   //          // symmY[nidx] = planeInc + j ;
-   //          g_t_symmY[planeInc+j] |= BOUNDARY_NODE;
-   //       }
-   //       if (colLoc == 0) {
-   //          // symmX[nidx] = planeInc + j*edgeNodes ;
-   //          g_t_symmX[planeInc + j*edgeNodes] |= BOUNDARY_NODE;
-   //       }
-   //       ++nidx ;
-   //    }
-   // }
-   // for (int i=0; i<m_numNode; i++){
-   //    printf("%d?%d) %d %d %d\n" ,myRank,i,g_t_symmZ[i],g_t_symmY[i],g_t_symmX[i]);
-   // }
-   
-
-
    //! End Setup Symmetry Plnes Function
-   printf("HERE NOW 3.6\n");
 
    //! Setup Elem Connectivity Function
    for (int i=0; i<m_numElem; ++i) {
@@ -1184,43 +1027,8 @@ void initialise(int myRank,
       }
    }
 
-   //REMOVE THIS
-   // g_lxim[0] = 0 ;
-   // for (int i=1; i<g_numElem; ++i) {
-   //    g_lxim[i]   = i-1 ;
-   //    g_lxip[i-1] = i ;
-   // }
-   // g_lxip[g_numElem-1] = g_numElem-1 ;
-
-   // for (int i=0; i<edgeElems; ++i) {
-   //    g_letam[i] = i ; 
-   //    g_letap[g_numElem-edgeElems+i] = g_numElem-edgeElems+i ;
-   // }
-
-   // for (int i=edgeElems; i<g_numElem; ++i) {
-   //    g_letam[i] = i-edgeElems ;
-   //    g_letap[i-edgeElems] = i ;
-   // }
-
-   // for (int i=0; i<edgeElems*edgeElems; ++i) {
-   //    g_lzetam[i] = i ;
-   //    g_lzetap[g_numElem-edgeElems*edgeElems+i] = g_numElem-edgeElems*edgeElems+i ;
-   // }
-   // for (int i=edgeElems*edgeElems; i<g_numElem; ++i) {
-   //    g_lzetam[i] = i - edgeElems*edgeElems ;
-   //    g_lzetap[i-edgeElems*edgeElems] = i ;
-   // }
-
-
-
-
-
-
-
-
-
    //! End Selem Connectivity Function
-   printf("HERE NOW 3.7\n");
+
 
    //! Setup Boundary Conditions Function !HERE
    // set up boundary condition information
@@ -1259,38 +1067,6 @@ void initialise(int myRank,
       ghostIdx[5] = pidx ;
    }
 
-   //OLD version
-   // for (int i=0; i<g_numElem; ++i) {
-   //    g_elemBC[i] = int(0) ;
-   // }
-   // for (int i=0; i<6; ++i) {
-   //    ghostIdx[i] = INT_MIN ;
-   // }
-   // int pidx = g_numElem ;
-   // if (planeMin != 0) {
-   //    ghostIdx[0] = pidx ;
-   //    pidx += g_sizeX*g_sizeY ;
-   // }
-   // if (planeMax != 0) {
-   //    ghostIdx[1] = pidx ;
-   //    pidx += g_sizeX*g_sizeY ;
-   // }
-   // if (rowMin != 0) {
-   //    ghostIdx[2] = pidx ;
-   //    pidx += g_sizeX*g_sizeZ ;
-   // }
-   //   if (rowMax != 0) {
-   //     ghostIdx[3] = pidx ;
-   //     pidx += g_sizeX*g_sizeZ ;
-   //   }
-   //   if (colMin != 0) {
-   //     ghostIdx[4] = pidx ;
-   //     pidx += g_sizeY*g_sizeZ ;
-   //   }
-   //   if (colMax != 0) {
-   //     ghostIdx[5] = pidx ;
-   //   }
-
    for (int i=0; i<edgeElems; ++i) {
 
       int planeInc = i*edgeElems*edgeElems ;
@@ -1307,10 +1083,9 @@ void initialise(int myRank,
                lzetam[rowInc+j-starting_m_numElem] = ghostIdx[0] + rowInc + j ;
             }
          }
-
          if (planeLoc == tp-1) {
-            if ( (rowInc+j+g_numElem-edgeElems*edgeElems) >=starting_m_numElem && (rowInc+j+m_numElem-edgeElems*edgeElems)<starting_m_numElem+m_numElem ){
-               elemBC[rowInc+j+g_numElem-edgeElems*edgeElems-starting_m_numElem] |= ZETA_P_FREE;
+            if ( (rowInc+j+g_numElem-(edgeElems*edgeElems)) >=starting_m_numElem && (rowInc+j+g_numElem-(edgeElems*edgeElems))<starting_m_numElem+m_numElem ){
+               elemBC[rowInc+j+g_numElem-(edgeElems*edgeElems)-starting_m_numElem] |= ZETA_P_FREE;
             }
          }
          else {
@@ -1324,7 +1099,6 @@ void initialise(int myRank,
                elemBC[planeInc+j-starting_m_numElem] |= ETA_M_SYMM ;
             }
          }
-
          else {
             if ( (planeInc+j) >=starting_m_numElem && (planeInc+j)<starting_m_numElem+m_numElem ){
                elemBC[planeInc+j-starting_m_numElem] |= ETA_M_COMM ;
@@ -1342,7 +1116,6 @@ void initialise(int myRank,
                letap[planeInc+j+edgeElems*edgeElems-edgeElems-starting_m_numElem] = ghostIdx[3] +  rowInc + j ;
             }
          }
-
          if (colLoc == 0) {
             if ( (planeInc+j*edgeElems) >=starting_m_numElem && (planeInc+j*edgeElems)<starting_m_numElem+m_numElem ){
                elemBC[planeInc+j*edgeElems-starting_m_numElem] |= XI_M_SYMM ;
@@ -1354,7 +1127,6 @@ void initialise(int myRank,
                lxim[planeInc+j*edgeElems-starting_m_numElem] = ghostIdx[4] + rowInc + j ;
             }
          }
-
          if (colLoc == tp-1) {
             if ( (planeInc+j*edgeElems+edgeElems-1) >=starting_m_numElem && (planeInc+j*edgeElems+edgeElems-1)<starting_m_numElem+m_numElem ){
                elemBC[planeInc+j*edgeElems+edgeElems-1-starting_m_numElem] |= XI_P_FREE ;
@@ -1369,63 +1141,492 @@ void initialise(int myRank,
       }
    }
 
+
+   //! End SetupBC Function
+
+   // Setup defaults
+
+   // These can be changed (requires recompile) if you want to run
+   // with a fixed timestep, or to a different end time, but it's
+   // probably easier/better to just run a fixed number of timesteps
+   // using the -i flag in 2.x
+
+   m_dtfixed = double(-1.0e-6) ; // Negative means use courant condition
+   m_stoptime  = double(1.0e-2); // *double(edgeElems*tp/45.0) ;
+
+   // Initial conditions
+   m_deltatimemultlb = double(1.1) ;
+   m_deltatimemultub = double(1.2) ;
+   m_dtcourant = double(1.0e+20) ;
+   m_dthydro   = double(1.0e+20) ;
+   m_dtmax     = double(1.0e-2) ;
+   m_time    = double(0.) ;
+   m_cycle   = int(0) ;
+
+   //! Difficult
+   // initialize field data 
+   for (int i=0; i<m_numElem; ++i) {
+
+      double x_local[8], y_local[8], z_local[8] ;
+      int *m_elemToNode = &nodelist[i*int(8)] ;
+
+      for( int lnode=0 ; lnode<8 ; ++lnode )
+      {
+        int gnode = m_elemToNode[lnode];
+        get_loc_from_index(edgeNodes,edgeNodes,edgeNodes,gnode, &curr_x, &curr_y, &curr_z);
+
+        x_local[lnode] = double(1.125)*double(curr_x)/double(meshEdgeElems);
+        y_local[lnode] = double(1.125)*double(curr_y)/double(meshEdgeElems);
+        z_local[lnode] = double(1.125)*double(curr_z)/double(meshEdgeElems);
+      }
+
+      // volume calculations
+      double volume = CalcElemVolume(x_local, y_local, z_local);
+
+      volo[i] = volume;
+      elemMass[i] = volume ;
+   }
+   for (int i=0; i<m_numNode; ++i) {
+      int *m_elemToNode = &nodelist[i*int(8)];
+      get_loc_from_index(edgeNodes,edgeNodes,edgeNodes,i+starting_m_numNode, &curr_x, &curr_y, &curr_z);
+
+      nodalMass[i] =0;
+      if (curr_x<edgeElems && curr_y<edgeElems && curr_z<edgeElems)
+      nodalMass[i] += volumeAt((curr_x  ) + (curr_y  )*edgeElems + (curr_z  )*edgeElems*edgeElems   ,meshEdgeElems,edgeNodes,edgeElems)/double(8.0) ;
+      if (curr_x<edgeElems && curr_y<edgeElems && curr_z>0)
+      nodalMass[i] += volumeAt((curr_x  ) + (curr_y  )*edgeElems + (curr_z-1)*edgeElems*edgeElems   ,meshEdgeElems,edgeNodes,edgeElems)/double(8.0) ; 
+      if (curr_x<edgeElems && curr_y>0         && curr_z<edgeElems)
+      nodalMass[i] += volumeAt((curr_x  ) + (curr_y-1)*edgeElems + (curr_z  )*edgeElems*edgeElems   ,meshEdgeElems,edgeNodes,edgeElems)/double(8.0) ;
+      if (curr_x<edgeElems && curr_y>0         && curr_z>0)
+      nodalMass[i] += volumeAt((curr_x  ) + (curr_y-1)*edgeElems + (curr_z-1)*edgeElems*edgeElems   ,meshEdgeElems,edgeNodes,edgeElems)/double(8.0) ; 
+      if (curr_x>0         && curr_y<edgeElems && curr_z<edgeElems)
+      nodalMass[i] += volumeAt((curr_x-1) + (curr_y  )*edgeElems + (curr_z  )*edgeElems*edgeElems   ,meshEdgeElems,edgeNodes,edgeElems)/double(8.0) ;
+      if (curr_x>0         && curr_y<edgeElems && curr_z>0)
+      nodalMass[i] += volumeAt((curr_x-1) + (curr_y  )*edgeElems + (curr_z-1)*edgeElems*edgeElems   ,meshEdgeElems,edgeNodes,edgeElems)/double(8.0) ;
+      if (curr_x>0         && curr_y>0         && curr_z<edgeElems)
+      nodalMass[i] += volumeAt((curr_x-1) + (curr_y-1)*edgeElems + (curr_z  )*edgeElems*edgeElems   ,meshEdgeElems,edgeNodes,edgeElems)/double(8.0) ;
+      if (curr_x>0         && curr_y>0         && curr_z>0)
+      nodalMass[i] += volumeAt((curr_x-1) + (curr_y-1)*edgeElems + (curr_z-1)*edgeElems*edgeElems   ,meshEdgeElems,edgeNodes,edgeElems)/double(8.0) ; 
+      
+      // nodalMass[i] =0;
+      // x   y    z -1
+      // x   y    z -1
+      // x   y -1 z -1
+      // x   y -1 z -1
+      // x-1 y    z -1
+      // x-1 y    z -1
+      // x-1 y -1 z -1
+      // x-1 y -1 z -1
+   }
+
+   op_printf("Voume at 0: %e, Nodal Mass: %e\n", volo[0], nodalMass[0]);
+
+   // deposit initial energy
+   // An energy of 3.948746e+7 is correct for a problem with
+   // 45 zones along a side - we need to scale it
+   if (myRank==0){
+      const double ebase = double(3.948746e+7);
+      double scale = (nx * tp)/double(45.0);
+      double einit = ebase*scale*scale*scale;
+      if (rowLoc + colLoc + planeLoc == 0) {
+         // Dump into the first zone (which we know is in the corner)
+         // of the domain that sits at the origin
+         e[0] = einit;
+      }
+      m_deltatime = (double(.5)*cbrt(volo[0]))/sqrt(double(2.0)*einit);
+   }
+
+   for (int i = 0; i < m_numNode; i++)
+   {
+      loc[3*i]=x[i];
+      loc[3*i +1]=y[i];
+      loc[3*i +2]=z[i];
+   }
+}
+
+//initialise using the static data
+static inline
+void initialiseSingular(int colLoc,
+               int rowLoc, int planeLoc,
+               int nx, int tp, int nr, int balance, int cost, Int8_t numRanks){
+   printf("%d %d %d %d %d %d\n",colLoc,rowLoc,planeLoc,nx,tp,nr);
+
+   int edgeElems = nx ;
+   int edgeNodes = edgeElems+1 ;
+
+   // sizeX = edgeElems ;
+   // sizeY = edgeElems ;
+   // sizeZ = edgeElems ;
+   // m_numElem = edgeElems * edgeElems * edgeElems;
+   // m_numNode = edgeNodes * edgeNodes * edgeNodes;
+
+   g_numElem = nx*nx*nx;
+   g_numNode = (nx+1)*(nx+1)*(nx+1);
+   g_sizeX = nx ;
+   g_sizeY = nx ;
+   g_sizeZ = nx ;
+
+   printf("%d %d %d %d %d\n",g_sizeX,g_sizeY,g_sizeZ,g_numElem,g_numNode);
+
+
+   g_m_regNumList = (int*) malloc(g_numElem * sizeof(int));
+
+   printf("HERE NOW 3.1\n");
+   //! Setup Comm Buffer, Should not be necessary in final app
+   rowMin = (rowLoc == 0)        ? 0 : 1;
+   rowMax = (rowLoc == tp-1)     ? 0 : 1;
+   colMin = (colLoc == 0)        ? 0 : 1;
+   colMax = (colLoc == tp-1)     ? 0 : 1;
+   planeMin = (planeLoc == 0)    ? 0 : 1;
+   planeMax = (planeLoc == tp-1) ? 0 : 1;
+
+   for(int i=0; i<g_numElem;++i){
+      g_p[i] = double(0.0);
+      g_e[i] = double(0.0);
+      g_q[i] = double(0.0);
+      g_ss[i] = double(0.0);
+   }
+
+   for(int i=0; i<g_numElem;++i){
+      g_v[i] = double(1.0);
+   }
+
+   for (int i = 0; i<g_numNode;++i){
+      g_xd[i] = double(0.0);
+      g_yd[i] = double(0.0);
+      g_zd[i] = double(0.0);
+   }
+
+   for (int i = 0; i<g_numNode;++i){
+   // for (int i = 0; i<m_numNode*3;++i){
+      g_xdd[i] = double(0.0);
+      g_ydd[i] = double(0.0);
+      g_zdd[i] = double(0.0);
+   }
+
+   for (int i=0; i<g_numNode; ++i) {
+      g_nodalMass[i] = double(0.0) ;
+   }
+
+   printf("HERE NOW 3.2\n");
+   //!Build Mesh function !HERE
+   int meshEdgeElems = tp * nx;
+   // op_printf("Building Mesh with planeloc: %d, col: %d, rowLoc: %d, meshEdge: %d\n", planeLoc, colLoc, rowLoc, meshEdgeElems);
+   int nidx = 0;
+   double tz = double(1.125)*double(planeLoc*nx)/double(meshEdgeElems) ;
+   for (int plane=0; plane<edgeNodes; ++plane) {
+      double ty = double(1.125)*double(rowLoc*nx)/double(meshEdgeElems) ;
+      for (int row=0; row<edgeNodes; ++row) {
+         double tx = double(1.125)*double(colLoc*nx)/double(meshEdgeElems) ;
+         for (int col=0; col<edgeNodes; ++col) {
+         g_x[nidx] = tx ;
+         g_y[nidx] = ty ;
+         g_z[nidx] = tz ;
+         ++nidx ;
+         // tx += ds ; // may accumulate roundoff... 
+         tx = double(1.125)*double(colLoc*nx+col+1)/double(meshEdgeElems) ;
+         }
+         // ty += ds ;  // may accumulate roundoff... 
+         ty = double(1.125)*double(rowLoc*nx+row+1)/double(meshEdgeElems) ;
+      }
+      // tz += ds ;  // may accumulate roundoff... 
+      tz = double(1.125)*double(planeLoc*nx+plane+1)/double(meshEdgeElems) ;
+   }
+
+
+   
+
+   // embed hexehedral elements in nodal point lattice 
+   int zidx = 0 ;
+   nidx = 0 ;
+   printf("HERE NOW 3.3\n");
+
+   for (int plane=0; plane<edgeElems; ++plane) {
+      for (int row=0; row<edgeElems; ++row) {
+         for (int col=0; col<edgeElems; ++col) {
+         int *localNode = &g_nodelist[zidx*int(8)] ;
+
+         localNode[0] = nidx                                       ;
+         localNode[1] = nidx                                   + 1 ;
+         localNode[2] = nidx                       + edgeNodes + 1 ;
+         localNode[3] = nidx                       + edgeNodes     ;
+         localNode[4] = nidx + edgeNodes*edgeNodes                 ;
+         localNode[5] = nidx + edgeNodes*edgeNodes             + 1 ;
+         localNode[6] = nidx + edgeNodes*edgeNodes + edgeNodes + 1 ;
+         localNode[7] = nidx + edgeNodes*edgeNodes + edgeNodes     ;
+         ++zidx ;
+         ++nidx ;
+         }
+         ++nidx ;
+      }
+      nidx += edgeNodes ;
+   }
+
+   //! End Build Mesh Function
+   printf("HERE NOW 3.4\n");
+
+   //! Start Create Region Sets
+   srand(0);
+   int myRank = 0;
+
+   m_numReg = nr;
+   g_m_regElemSize = (int*) malloc(m_numReg * sizeof(int));
+   g_m_regElemlist = (int**) malloc(m_numReg * sizeof(int));
+   int nextIndex = 0;
+   //if we only have one region just fill it
+   // Fill out the regNumList with material numbers, which are always
+   // the region index plus one 
+   if(m_numReg == 1){
+      printf("HERE NOW 3.4.1\n");
+
+      while(nextIndex < g_numElem){
+         g_m_regNumList[nextIndex] = 1;
+         nextIndex++;
+      }
+      g_m_regElemSize[0] = 0;
+   } else {//If we have more than one region distribute the elements.
+      printf("HERE NOW 3.4.2\n");
+
+      int regionNum;
+      int regionVar;
+      int lastReg = -1;
+      int binSize;
+      int elements;
+      int runto = 0;
+      int costDenominator = 0;
+      int* g_regBinEnd = (int*) malloc(m_numReg * sizeof(int));
+      //Determine the relative weights of all the regions.  This is based off the -b flag.  Balance is the value passed into b.  
+      for(int i=0; i<m_numReg;++i){
+         g_m_regElemSize[i] = 0;
+         costDenominator += pow((i+1), balance);//Total sum of all regions weights
+         g_regBinEnd[i] = costDenominator;  //Chance of hitting a given region is (regBinEnd[i] - regBinEdn[i-1])/costDenominator
+      }
+      //Until all elements are assigned
+      while (nextIndex < m_numElem) {
+         //pick the region
+         regionVar = rand() % costDenominator;
+         int i = 0;
+         while(regionVar >= g_regBinEnd[i]) i++;
+         //rotate the regions based on MPI rank.  Rotation is Rank % m_numRegions this makes each domain have a different region with 
+         //the highest representation
+         regionNum = ((i+myRank)% m_numReg) +1;
+         while(regionNum == lastReg){
+            regionVar = rand() % costDenominator;
+            i = 0;
+            while(regionVar >= g_regBinEnd[i]) i++;
+            regionNum = ((i + myRank) % m_numReg) + 1;
+         }
+         //Pick the bin size of the region and determine the number of elements.
+         binSize = rand() % 1000;
+         if(binSize < 773) {
+	         elements = rand() % 15 + 1;
+	      }
+	      else if(binSize < 937) {
+	         elements = rand() % 16 + 16;
+	      }
+	      else if(binSize < 970) {
+	         elements = rand() % 32 + 32;
+	      }
+	      else if(binSize < 974) {
+	         elements = rand() % 64 + 64;
+	      } 
+	      else if(binSize < 978) {
+	         elements = rand() % 128 + 128;
+	      }
+	      else if(binSize < 981) {
+	         elements = rand() % 256 + 256;
+	      }
+	      else
+	         elements = rand() % 1537 + 512;
+         runto = elements + nextIndex;
+	      //Store the elements.  If we hit the end before we run out of elements then just stop.
+         while (nextIndex < runto && nextIndex < m_numElem) {
+	         g_m_regNumList[nextIndex] = regionNum;
+	         nextIndex++;
+	      }
+         lastReg = regionNum;
+      }
+      delete [] g_regBinEnd; 
+   }
+   // Convert m_regNumList to region index sets
+   // First, count size of each region 
+      printf("HERE NOW 3.4.3\n");
+
+   for (int i=0 ; i<g_numElem ; ++i) {
+      int r = g_m_regNumList[i]-1; // region index == regnum-1
+      g_m_regElemSize[r]++;
+   }
+   // Second, allocate each region index set
+   for (int i=0 ; i<m_numReg ; ++i) {
+      g_m_regElemlist[i] = (int*) malloc(g_m_regElemSize[i]*sizeof(int));
+      g_m_regElemSize[i] = 0;
+   }
+         printf("HERE NOW 3.4.4\n");
+
+   // Third, fill index sets
+   for (int i=0 ; i<g_numElem ; ++i) {
+
+      int r = g_m_regNumList[i]-1;       // region index == regnum-1
+      int regndx = g_m_regElemSize[r]++; // Note increment
+
+      g_m_regElemlist[r][regndx] = i;
+   }
+
+
+
+   //! End Create Region Sets
+   printf("HERE NOW 3.5\n");
+
+   //! Setup Symmetry Planes Function !HERE
+   for (int i = 0; i<g_numNode;++i){ 
+   // for (int i = 0; i<m_numNode*3;++i){
+      g_t_symmX[i] |= FREE_NODE; 
+      g_t_symmY[i] |= FREE_NODE;
+      g_t_symmZ[i] |= FREE_NODE;
+   }
+   nidx = 0 ;
+   for (int i=0; i<edgeNodes; ++i) {
+      int planeInc = i*edgeNodes*edgeNodes ;
+      int rowInc   = i*edgeNodes ;
+      for (int j=0; j<edgeNodes; ++j) {
+         if (planeLoc == 0) {
+            // symmZ[nidx] = rowInc   + j ;
+            g_t_symmZ[rowInc + j] |= BOUNDARY_NODE;
+         }
+         if (rowLoc == 0) {
+            // symmY[nidx] = planeInc + j ;
+            g_t_symmY[planeInc+j] |= BOUNDARY_NODE;
+         }
+         if (colLoc == 0) {
+            // symmX[nidx] = planeInc + j*edgeNodes ;
+            g_t_symmX[planeInc + j*edgeNodes] |= BOUNDARY_NODE;
+         }
+         ++nidx ;
+      }
+   }
+
+   //! End Setup Symmetry Plnes Function
+   printf("HERE NOW 3.6\n");
+
+   //! Setup Elem Connectivity Function
+   g_lxim[0] = 0 ;
+   for (int i=1; i<g_numElem; ++i) {
+      g_lxim[i]   = i-1 ;
+      g_lxip[i-1] = i ;
+   }
+   g_lxip[g_numElem-1] = g_numElem-1 ;
+
+   for (int i=0; i<edgeElems; ++i) {
+      g_letam[i] = i ; 
+      g_letap[g_numElem-edgeElems+i] = g_numElem-edgeElems+i ;
+   }
+   for (int i=edgeElems; i<g_numElem; ++i) {
+      g_letam[i] = i-edgeElems ;
+      g_letap[i-edgeElems] = i ;
+   }
+
+   for (int i=0; i<edgeElems*edgeElems; ++i) {
+      g_lzetam[i] = i ;
+      g_lzetap[g_numElem-edgeElems*edgeElems+i] = g_numElem-edgeElems*edgeElems+i ;
+   }
+   for (int i=edgeElems*edgeElems; i<g_numElem; ++i) {
+      g_lzetam[i] = i - edgeElems*edgeElems ;
+      g_lzetap[i-edgeElems*edgeElems] = i ;
+   }
+   //! End Selem Connectivity Function
+   printf("HERE NOW 3.7\n");
+
+   //! Setup Boundary Conditions Function !HERE
+   // set up boundary condition information
+   int ghostIdx[6] ;  // offsets to ghost locations
+   for (int i=0; i<g_numElem; ++i) {
+      g_elemBC[i] = int(0) ;
+   }
+   for (int i=0; i<6; ++i) {
+      ghostIdx[i] = INT_MIN ;
+   }
+
+  int pidx = g_numElem ;
+  if (planeMin != 0) {
+    ghostIdx[0] = pidx ;
+    pidx += g_sizeX*g_sizeY ;
+  }
+
+  if (planeMax != 0) {
+    ghostIdx[1] = pidx ;
+    pidx += g_sizeX*g_sizeY ;
+  }
+
+  if (rowMin != 0) {
+    ghostIdx[2] = pidx ;
+    pidx += g_sizeX*g_sizeZ ;
+  }
+
+  if (rowMax != 0) {
+    ghostIdx[3] = pidx ;
+    pidx += g_sizeX*g_sizeZ ;
+  }
+
+  if (colMin != 0) {
+    ghostIdx[4] = pidx ;
+    pidx += g_sizeY*g_sizeZ ;
+  }
+
+  if (colMax != 0) {
+    ghostIdx[5] = pidx ;
+  }
+
   // symmetry plane or free surface BCs 
-//   for (int i=0; i<edgeElems; ++i) {
+  for (int i=0; i<edgeElems; ++i) {
 
-//    int planeInc = i*edgeElems*edgeElems ;
-//    int rowInc   = i*edgeElems ;
-//    for (int j=0; j<edgeElems; ++j) {
-//       if (planeLoc == 0) {
-// 	      g_elemBC[rowInc+j] |= ZETA_M_SYMM ;
-//       }
-//       else {
-// 	      g_elemBC[rowInc+j] |= ZETA_M_COMM ;
-// 	      g_lzetam[rowInc+j] = ghostIdx[0] + rowInc + j ;
-//       }
-//       if (planeLoc == tp-1) {
-// 	      g_elemBC[rowInc+j+m_numElem-edgeElems*edgeElems] |= ZETA_P_FREE;
-//       }
-//       else {
-// 	      g_elemBC[rowInc+j+m_numElem-edgeElems*edgeElems] |= ZETA_P_COMM ;
-// 	      g_lzetap[rowInc+j+m_numElem-edgeElems*edgeElems] = ghostIdx[1] + rowInc + j ;
-//       }
-//       if (rowLoc == 0) {
-// 	      g_elemBC[planeInc+j] |= ETA_M_SYMM ;
-//       }
-//       else {
-// 	      g_elemBC[planeInc+j] |= ETA_M_COMM ;
-// 	      g_letam[planeInc+j] = ghostIdx[2] + rowInc + j ;
-//       }
-//       if (rowLoc == tp-1) {
-// 	      g_elemBC[planeInc+j+edgeElems*edgeElems-edgeElems] |= ETA_P_FREE ;
-//       }
-//       else {
-// 	      g_elemBC[planeInc+j+edgeElems*edgeElems-edgeElems] |=  ETA_P_COMM ;
-// 	      g_letap[planeInc+j+edgeElems*edgeElems-edgeElems] = ghostIdx[3] +  rowInc + j ;
-//       }
-//       if (colLoc == 0) {
-// 	      g_elemBC[planeInc+j*edgeElems] |= XI_M_SYMM ;
-//       }
-//       else {
-// 	      g_elemBC[planeInc+j*edgeElems] |= XI_M_COMM ;
-// 	      g_lxim[planeInc+j*edgeElems] = ghostIdx[4] + rowInc + j ;
-//       }
+   int planeInc = i*edgeElems*edgeElems ;
+   int rowInc   = i*edgeElems ;
+   for (int j=0; j<edgeElems; ++j) {
+      if (planeLoc == 0) {
+	      g_elemBC[rowInc+j] |= ZETA_M_SYMM ;
+      }
+      else {
+	      g_elemBC[rowInc+j] |= ZETA_M_COMM ;
+	      g_lzetam[rowInc+j] = ghostIdx[0] + rowInc + j ;
+      }
+      if (planeLoc == tp-1) {
+	      g_elemBC[rowInc+j+m_numElem-edgeElems*edgeElems] |= ZETA_P_FREE;
+      }
+      else {
+	      g_elemBC[rowInc+j+m_numElem-edgeElems*edgeElems] |= ZETA_P_COMM ;
+	      g_lzetap[rowInc+j+m_numElem-edgeElems*edgeElems] = ghostIdx[1] + rowInc + j ;
+      }
+      if (rowLoc == 0) {
+	      g_elemBC[planeInc+j] |= ETA_M_SYMM ;
+      }
+      else {
+	      g_elemBC[planeInc+j] |= ETA_M_COMM ;
+	      g_letam[planeInc+j] = ghostIdx[2] + rowInc + j ;
+      }
+      if (rowLoc == tp-1) {
+	      g_elemBC[planeInc+j+edgeElems*edgeElems-edgeElems] |= ETA_P_FREE ;
+      }
+      else {
+	      g_elemBC[planeInc+j+edgeElems*edgeElems-edgeElems] |=  ETA_P_COMM ;
+	      g_letap[planeInc+j+edgeElems*edgeElems-edgeElems] = ghostIdx[3] +  rowInc + j ;
+      }
+      if (colLoc == 0) {
+	      g_elemBC[planeInc+j*edgeElems] |= XI_M_SYMM ;
+      }
+      else {
+	      g_elemBC[planeInc+j*edgeElems] |= XI_M_COMM ;
+	      g_lxim[planeInc+j*edgeElems] = ghostIdx[4] + rowInc + j ;
+      }
 
-//       if (colLoc == tp-1) {
-//          printf("COLLLOC IS HERE %d %d\n",colLoc,planeInc+j*edgeElems+edgeElems-1);
-// 	      g_elemBC[planeInc+j*edgeElems+edgeElems-1] |= XI_P_FREE ;
-//       }
-//       else {
-//          printf("COLLLOC IS NOW HERE %d %d %d\n",colLoc,tp,tp-1);
-// 	      g_elemBC[planeInc+j*edgeElems+edgeElems-1] |= XI_P_COMM ;
-// 	      g_lxip[planeInc+j*edgeElems+edgeElems-1] = ghostIdx[5] + rowInc + j ;
-//       }
-//     }
-//    }
-//    for (int i=0; i<g_numElem; i++){
-//       printf("%d?%d) %d %d %d %d %d %d %d \n" ,myRank,i,g_elemBC[i],g_lxip[i],g_lxim[i],g_letap[i],g_letam[i],g_lzetap[i],g_lzetam[i]);
-//    }
-
+      if (colLoc == tp-1) {
+	      g_elemBC[planeInc+j*edgeElems+edgeElems-1] |= XI_P_FREE ;
+      }
+      else {
+	      g_elemBC[planeInc+j*edgeElems+edgeElems-1] |= XI_P_COMM ;
+	      g_lxip[planeInc+j*edgeElems+edgeElems-1] = ghostIdx[5] + rowInc + j ;
+      }
+    }
+   }
    //! End SetupBC Function
    printf("HERE NOW 3.8\n");
 
@@ -1451,125 +1652,66 @@ void initialise(int myRank,
    printf("HERE NOW 3.9\n");
 
 
+   double mytotal =0;
+   for (int i = 0; i < edgeNodes*edgeNodes*edgeNodes; i++)
+   {
+      mytotal+=g_x[i];
+   }
+   printf("curstep %e %d\n",mytotal,edgeNodes);
 
-   //! Difficult
+
+
    // initialize field data 
-   for (int i=0; i<m_numElem; ++i) {
+   for (int i=0; i<g_numElem; ++i) {
 
       double x_local[8], y_local[8], z_local[8] ;
-      int *m_elemToNode = &nodelist[i*int(8)] ;
-
+      int *g_elemToNode = &g_nodelist[i*int(8)] ;
       for( int lnode=0 ; lnode<8 ; ++lnode )
       {
-        int gnode = m_elemToNode[lnode];
-        get_loc_from_index(edgeNodes,edgeNodes,edgeNodes,gnode, &curr_x, &curr_y, &curr_z);
-
-        x_local[lnode] = double(1.125)*double(curr_x)/double(meshEdgeElems);
-        y_local[lnode] = double(1.125)*double(curr_y)/double(meshEdgeElems);
-        z_local[lnode] = double(1.125)*double(curr_z)/double(meshEdgeElems);
+        int gnode = g_elemToNode[lnode];
+        x_local[lnode] = g_x[gnode];
+        y_local[lnode] = g_y[gnode];
+        z_local[lnode] = g_z[gnode];
       }
 
       // volume calculations
       double volume = CalcElemVolume(x_local, y_local, z_local );
 
-      volo[i] = volume ;
-      elemMass[i] = volume ;
-
-      //! Difficult
-      // int get_rank_from_index(int index, int global_size, int number_of_ranks){
-      //MPI send and recv usign the indexes as tags
-
-
-      //On 100
-      // 0?994) 1.423828e-03
-      // 0?995) 1.423828e-03
-      // 0?996) 1.423828e-03
-      // 0?997) 1.423828e-03
-      // 0?998) 1.423828e-03
-      // 0?999) 1.423828e-03
-      // for (int j=0; j<8; ++j) {
-      //    int idx = m_elemToNode[j] ;
-      //    nodalMass[idx] += volume / double(8.0) ;
-      // }
-
-      // for (int j=0; j<8; ++j) {
-      //    int idx = m_elemToNode[j] ;
-      //    if (  idx < starting_m_numElem || idx>=starting_m_numElem+m_numElem){
-      //       int send_ID = get_rank_from_index(idx,g_numNode,numRanks);
-      //       MPI_Send(&volume,1,MPI_DOUBLE,send_ID,idx,MPI_COMM_WORLD);
-      //    }  
-      // }
-   }
-   printf("HERE NOW 3.20\n");
-
-   for (int i=0; i<m_numElem; ++i) {
-      int *m_elemToNode = &nodelist[i*int(8)] ;
+      g_volo[i] = volume ;
+      g_elemMass[i] = volume ;
       for (int j=0; j<8; ++j) {
-         int idx = m_elemToNode[j] ;
-         int send_ID = get_rank_from_index(idx,g_numNode,numRanks);
-
-         if (send_ID==myRank){
-            nodalMass[idx-starting_m_numNode]+=volo[i]/double(8.0);
-         }else{
-            MPI_Send(&volo[i],1,MPI_DOUBLE,send_ID,idx,MPI_COMM_WORLD);
-         }
+         int idx = g_elemToNode[j] ;
+         g_nodalMass[idx] += volume / double(8.0) ;
       }
    }
-   printf("HERE NOW 3.21\n");
+   printf("HERE NOW 3.10\n");
 
-   //!investigate this and how it can be done better
-   MPI_Barrier(MPI_COMM_WORLD);
-   sleep(1);
-   MPI_Barrier(MPI_COMM_WORLD);
-
-   for (int i=0; i<m_numNode; ++i){
-      for (int j=0; j<8; ++j) {
-         int tag = i+starting_m_numNode;
-         int flag;
-         MPI_Iprobe( MPI_ANY_SOURCE , tag, MPI_COMM_WORLD , &flag, MPI_STATUS_IGNORE );
-         double other_volume;
-         if (flag){
-            MPI_Recv(&other_volume,1,MPI_DOUBLE,MPI_ANY_SOURCE,tag,MPI_COMM_WORLD,MPI_STATUS_IGNORE );
-            nodalMass[i]+=other_volume/double(8.0);
-         }
-      }
-   //    // nodalMass[i] += volo[i] / double(8.0) ;
-   }
-   //! Difficult
-
-   // //! Difficult
-
-   op_printf("Voume at 0: %e, Nodal Mass: %e\n", volo[0], nodalMass[0]);
+   op_printf("Voume at 0: %e, Nodal Mass: %e\n", g_volo[0], g_nodalMass[0]);
    printf("HERE NOW 3.11\n");
 
    // deposit initial energy
    // An energy of 3.948746e+7 is correct for a problem with
    // 45 zones along a side - we need to scale it
-   if (myRank==0){
-      const double ebase = double(3.948746e+7);
-      double scale = (nx * tp)/double(45.0);
-      double einit = ebase*scale*scale*scale;
-      if (rowLoc + colLoc + planeLoc == 0) {
-         // Dump into the first zone (which we know is in the corner)
-         // of the domain that sits at the origin
-         e[0] = einit;
-      }
-      m_deltatime = (double(.5)*cbrt(volo[0]))/sqrt(double(2.0)*einit);
+   const double ebase = double(3.948746e+7);
+   double scale = (nx * tp)/double(45.0);
+   double einit = ebase*scale*scale*scale;
+   if (rowLoc + colLoc + planeLoc == 0) {
+      // Dump into the first zone (which we know is in the corner)
+      // of the domain that sits at the origin
+      g_e[0] = einit;
    }
    printf("HERE NOW 3.12\n");
 
-   //! restore
-   for (int i = 0; i < m_numNode; i++)
+   m_deltatime = (double(.5)*cbrt(g_volo[0]))/sqrt(double(2.0)*einit);
+
+   for (int i = 0; i < edgeNodes*edgeNodes*edgeNodes; i++)
    {
-      loc[3*i]=x[i];
-      loc[3*i +1]=y[i];
-      loc[3*i +2]=z[i];
+      g_loc[3*i]=g_x[i];
+      g_loc[3*i +1]=g_y[i];
+      g_loc[3*i +2]=g_z[i];
    }
-
-   printf("HERE NOW 3.13\n");
+   
 }
-
-
 
 static void scatter_double_array(double *g_array, double *l_array,
                                  int comm_size, int g_size, int l_size,
@@ -1949,7 +2091,6 @@ void readAndInitVars(char* file){
    ql = (double*) malloc(m_numElem * sizeof(double));
    qq = (double*) malloc(m_numElem * sizeof(double));
    //Temporary Vars
-   // sigxx = (double*) malloc(m_numElem* 3 * sizeof(double));
    sigxx = (double*) malloc(m_numElem*  sizeof(double));
    sigyy = (double*) malloc(m_numElem*  sizeof(double));
    sigzz = (double*) malloc(m_numElem*  sizeof(double));
@@ -1993,8 +2134,8 @@ void readAndInitVars(char* file){
 
 
    for(int i=0; i<m_numElem;++i){
-      p[i] = double(0.0);
-      // e[i] = double(0.0);
+      // p[i] = double(0.0);
+      e[i] = double(0.0);
       q[i] = double(0.0);
       ss[i] = double(0.0);
    }
@@ -3293,11 +3434,11 @@ void ParseCommandLineOptions(int argc, char *argv[],
          }
          /* -v */
          else if (strcmp(argv[i], "-v") == 0) {
-#if VIZ_MESH            
+            #if VIZ_MESH            
             opts->viz = 1;
-#else
+            #else
             ParseError("Use of -v requires compiling with -DVIZ_MESH\n", myRank);
-#endif
+            #endif
             i++;
          }
          /* -h */
@@ -3329,6 +3470,60 @@ void ParseCommandLineOptions(int argc, char *argv[],
             }
             i+=2;
          }
+         
+         /* -t partiotioning library <S,PK,PG,PKG,K> */
+         else if(strcmp(argv[i], "-t") == 0) {
+            if (i+1 >= argc) {
+               ParseError("Missing letter argumnet to -t\n", myRank);
+            }
+            if ( strcmp(argv[i+1], "S") == 0 ){
+               opts->partition = Partition_S;
+            }
+            if ( strcmp(argv[i+1], "PK") == 0 ){
+               opts->partition = Partition_PK;
+            }
+            if ( strcmp(argv[i+1], "PG") == 0 ){
+               opts->partition = Partition_PG;
+            }
+            if ( strcmp(argv[i+1], "PGK") == 0 ){
+               opts->partition = Partition_PGK;
+            }
+            if ( strcmp(argv[i+1], "K") == 0 ){
+               opts->partition = Partition_K;
+            }
+            i+=2;
+         }
+
+         /* -t initialiseation method <S,PK,PG,PKG,K> */
+         else if(strcmp(argv[i], "-d") == 0) {
+            if (i+1 >= argc) {
+               ParseError("Missing letter argumnet to -i\n", myRank);
+            }
+            if ( strcmp(argv[i+1], "S") == 0 ){
+               opts->creation = Creation_Root;
+            }
+            if ( strcmp(argv[i+1], "P") == 0 ){
+               opts->creation = Creation_Parallel;
+            }
+            i+=2;
+         }
+
+         /* -t initialiseation method <S,PK,PG,PKG,K> */
+         else if(strcmp(argv[i], "-tm") == 0) {
+            if (i+1 >= argc) {
+               ParseError("Missing letter argumnet to -i\n", myRank);
+            }
+            if ( strcmp(argv[i+1], "S") == 0 ){
+               opts->time = Show_Time;
+            }
+            if ( strcmp(argv[i+1], "H") == 0 ){
+               opts->time = Hide_Time;
+            }
+            i+=2;
+         }
+
+
+         /* -f <numfilepieces> */
          else {
             char msg[80];
             i++;
@@ -3447,6 +3642,32 @@ void InitMeshDecomp(int numRanks, int myRank,
 }
 
 
+void writeFileADHFJ(int myRank,int m_numNodes,double *x,double *y, double *z, char *file ){
+   int fileLength = strlen(file);
+   int numLength=1;
+
+   if (myRank<=0){
+      numLength=1;
+   }else{
+      numLength=(int)(ceil(  log10(myRank+1)  ));
+   }
+
+   char *newName = (char*)malloc( (numLength+fileLength+2)*sizeof(char) );
+   strcpy(newName, file);
+   sprintf(&newName[fileLength],"%d",myRank);
+   newName[fileLength+numLength] ='\0';
+
+   printf(newName);
+   FILE* ptr = fopen(newName,"w");
+   for (int i = 0; i < m_numNodes; i++)
+   {
+      /* code */
+      fprintf(ptr,"%d, %.6f, %.6f, %.6f\n",myRank,x[i],y[i],z[i]);
+   }
+   fclose(ptr);
+   free(newName);
+}
+
 
 /******************************************/
 
@@ -3481,9 +3702,9 @@ int main(int argc, char *argv[])
    if ((myRank == 0) && (opts.quiet == 0)) {
       std::cout << "Running problem size " << opts.nx << "^3 per domain until completion\n";
       std::cout << "Num processors: "      << numRanks << "\n";
-#if _OPENMP
+      #if _OPENMP
       std::cout << "Num threads: " << omp_get_max_threads() << "\n";
-#endif
+      #endif
       std::cout << "Total number of elements: " << (opts.nx*opts.nx*opts.nx) << " \n\n";
       std::cout << "To run other sizes, use -s <integer>.\n";
       std::cout << "To run a fixed number of iterations, use -i <integer>.\n";
@@ -3514,43 +3735,30 @@ int main(int argc, char *argv[])
    g_numElem = opts.nx*opts.nx*opts.nx;
    g_numNode = (opts.nx+1)*(opts.nx+1)*(opts.nx+1);
 
-   printf("DEBUG HELP:m_numNode:%d,g_numNode:%d\n",m_numNode,g_numNode);
-
-
-   // if (myRank == 0){
-   //    printf("HERE NOW 1\n");
-
-   //    allocateGlobalElems();
-   //    printf("HERE NOW 2\n");
-   //    allocateGlobalNodes();
-   //    printf("HERE NOW 3\n");
-   // }
-
-
-   printf("initialising\n");
+   //Compute the local size
    m_numElem =  compute_local_size(g_numElem,(Int8_t)numRanks,myRank);
    m_numNode =  compute_local_size(g_numNode,(Int8_t)numRanks,myRank);
+
    allocateElems();
-   // printf("HERE NOW 6\n");
    allocateNodes();
-   initialise(myRank,opts.nx,1,opts.numReg,opts.balance, opts.cost,(Int8_t)numRanks);
+   if (opts.creation == Creation_Parallel){
+      initialise(myRank,opts.nx,1,opts.numReg,opts.balance, opts.cost,(Int8_t)numRanks);
+   }else if (opts.creation == Creation_Root){
+      if (myRank == 0){
+         allocateGlobalElems();
+         allocateGlobalNodes();
 
-
-
-   printf("HERE NOW 4\n");
-   printf("Done\n");
-
-   MPI_Barrier(MPI_COMM_WORLD);
-
-   printf("HERE NOW 6\n");
-
-
+         initialiseSingular(0,0,0,opts.nx,1,opts.numReg,opts.balance, opts.cost,(Int8_t)numRanks);
+      }
+      distributeGlobalElems(numRanks,g_numElem,m_numElem,g_numNode,m_numNode);
+   }
    MPI_Bcast(&m_deltatime,1,MPI_DOUBLE,0,MPI_COMM_WORLD);
 
-   // printf("HERE NOW 5\n");
+   writeFileADHFJ(myRank,m_numNode,x,y,z,"/home/joseph/3rdYear/testingFolder/partitioning/Before/Node");
 
-   printf("HERE NOW 7\n");
 
+
+   MPI_Barrier(MPI_COMM_WORLD);
 
    // (int comm_size, int g_numElem , int numElem, int g_numNode, int numNode)
    // distributeGlobalElems(numRanks,g_numElem,m_numElem,g_numNode,m_numNode);
@@ -3641,42 +3849,79 @@ int main(int argc, char *argv[])
    initOp2Vars();
    int siz = op_get_size(elems);
    std::cout <<  "Global Size: " << siz << ", Local Elems: " << elems->size << ", Local Nodes: "<< nodes->size << "\n";
-
+   MPI_Barrier(MPI_COMM_WORLD);
+   if (myRank==0){printf("\n\n");}
    op_diagnostic_output();
-   // op_partition("BLOCK", "ANY", NULL, NULL, NULL);
-   op_partition("PTSCOTCH", "KWAY", nodes, p_nodelist, p_loc);
 
-   printf("Partition Done\n");
+   switch (opts.partition)
+   {
+      case Partition_S:
+         op_partition("PTSCOTCH", "KWAY", nodes, p_nodelist, p_loc);
+         break;
+      case Partition_PK:
+         op_partition("PARMETIS", "KWAY", nodes, p_nodelist, p_loc);
+         break;
+      case Partition_PG:
+         op_partition("PARMETIS", "GEOM", nodes, p_nodelist, p_loc);
+         break;
+      case Partition_PGK:
+         op_partition("PARMETIS", "GEOMKWAY", nodes, p_nodelist, p_loc);
+         break;
+      case Partition_K:
+         op_partition("KAHIP", "KWAY", nodes, p_nodelist, p_loc);
+         break;
+   }
 
    // op_dump_to_hdf5("file_out.h5");
    // op_write_const_hdf5("deltatime", 1, "double", (char*)&m_deltatime, FILE_NAME_PATH);
 
    MPI_Barrier(MPI_COMM_WORLD);
-   for (int i = 0; i < m_numNode; i++)
-   {
+   if (myRank==0){printf("\n\n");}
 
-      double* my_x= (double*)p_x->data;
-      double* my_y= (double*)p_y->data;
-      double* my_z= (double*)p_z->data;
-      printf("LOCATION: !%d!%f!%f!%f\n",myRank,my_x[i],my_y[i],my_z[i]);
+   if (myRank==0){
+      printf("size %d\n",p_x->set->size);
+      printf("exec_size x%d\n",p_x->set->exec_size);
+      printf("nonexec_size x%d\n",p_x->set->nonexec_size);
+
+      printf("exec_size y%d\n",p_y->set->exec_size);
+      printf("nonexec_size y %d\n",p_y->set->nonexec_size);
+
+      printf("exec_size z %d\n",p_z->set->exec_size);
+      printf("nonexec_size z%d\n",p_z->set->nonexec_size);
+      printf("m_nodes %d \n",m_numNode);
    }
+
+
+
+   // SHOW THE CUBE AS DIVIDED
+   writeFileADHFJ(myRank,
+      p_x->set->size+p_x->set->exec_size+p_x->set->nonexec_size,
+      (double *)p_x->data,
+      (double *)p_y->data,
+      (double *)p_z->data,"/home/joseph/3rdYear/testingFolder/partitioning/After/Node");
+
+   // writeFileADHFJ(myRank,p_x->set->nonexec_size+p_x->set->exec_size,(double *)p_x->data,(double *)p_y->data,(double *)p_z->data,"/home/joseph/3rdYear/testingFolder/partitioning/All/Node");
+   // double *outputX = (double*) malloc(m_numNode*sizeof(double));
+   // double *outputY = (double*) malloc(m_numNode*sizeof(double));
+   // double *outputZ = (double*) malloc(m_numNode*sizeof(double));
+   // op_fetch_data(p_x, outputX);
+   // op_fetch_data(p_y, outputY);
+   // op_fetch_data(p_z, outputZ);
+   // writeFileADHFJ(myRank,m_numNode,outputX,outputY,outputZ,"/home/joseph/3rdYear/testingFolder/partitioning/After/Node");
+   // free(outputX);
+   // free(outputY);
+   // free(outputZ);
+
    MPI_Barrier(MPI_COMM_WORLD);
 
    
    // BEGIN timestep to solution */
    double cpu_t1, cpu_t2, wall_t1, wall_t2;
    op_timers(&cpu_t1, &wall_t1);
-//debug to see region sizes
-//   for(int i = 0; i < locDom->numReg(); i++)
-//      std::cout << "region" << i + 1<< "size" << locDom->regElemSize(i) <<std::endl;
 
-   printf("MAIN LOOP\n");
    // !Main Loop
    while((m_time < m_stoptime) && (m_cycle < opts.its)) {
-      // op_print("Incrment");
       TimeIncrement(myRank) ;
-      // op_print("Leapfrog");
-
       LagrangeLeapFrog() ;
 
       if ((opts.showProg != 0) && (opts.quiet == 0) && (myRank==0)) {
@@ -3688,7 +3933,6 @@ int main(int argc, char *argv[])
          std::cout.unsetf(std::ios_base::floatfield);
       }
    }
-   printf("EXIT MAIN LOOP, %d\n",myRank);
 
    op_timers(&cpu_t2, &wall_t2);
    double walltime = wall_t2 - wall_t1;
@@ -3699,16 +3943,23 @@ int main(int argc, char *argv[])
       // DumpToVisit(*locDom, opts.numFiles, myRank, numRanks) ;
    // }
 
+   // writeFileADHFJ(myRank,
+   //    p_x->set->size+p_x->set->exec_size+p_x->set->nonexec_size,
+   //    (double *)p_x->data,
+   //    (double *)p_y->data,
+   //    (double *)p_z->data,"/home/joseph/3rdYear/testingFolder/partitioning/All/Node");
+
    double *verify_e = (double*) malloc(m_numElem*sizeof(double));
    op_fetch_data(p_e, verify_e);
    
-   printf("DONE 2\n");
    if ((myRank == 0) && (opts.quiet == 0)) {
-      printf("DONE \n");
       VerifyAndWriteFinalOutput(walltime, m_cycle, opts.nx, numRanks, verify_e);
    }
 
-   // op_timing_output();
+   if (opts.time){op_timing_output();}
+
+
+
    op_exit(); 
 
    return 0 ;
