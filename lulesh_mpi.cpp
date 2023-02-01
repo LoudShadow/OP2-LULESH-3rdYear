@@ -3754,7 +3754,7 @@ int main(int argc, char *argv[])
    }
    MPI_Bcast(&m_deltatime,1,MPI_DOUBLE,0,MPI_COMM_WORLD);
 
-   writeFileADHFJ(myRank,m_numNode,x,y,z,"/home/joseph/3rdYear/testingFolder/partitioning/Before/Node");
+   // writeFileADHFJ(myRank,m_numNode,x,y,z,"/home/joseph/3rdYear/testingFolder/partitioning/Before/Node");
 
 
 
@@ -3894,11 +3894,11 @@ int main(int argc, char *argv[])
 
 
    // SHOW THE CUBE AS DIVIDED
-   writeFileADHFJ(myRank,
-      p_x->set->size+p_x->set->exec_size+p_x->set->nonexec_size,
-      (double *)p_x->data,
-      (double *)p_y->data,
-      (double *)p_z->data,"/home/joseph/3rdYear/testingFolder/partitioning/After/Node");
+   // writeFileADHFJ(myRank,
+   //    p_x->set->size+p_x->set->exec_size+p_x->set->nonexec_size,
+   //    (double *)p_x->data,
+   //    (double *)p_y->data,
+   //    (double *)p_z->data,"/home/joseph/3rdYear/testingFolder/partitioning/After/Node");
 
    // writeFileADHFJ(myRank,p_x->set->nonexec_size+p_x->set->exec_size,(double *)p_x->data,(double *)p_y->data,(double *)p_z->data,"/home/joseph/3rdYear/testingFolder/partitioning/All/Node");
    // double *outputX = (double*) malloc(m_numNode*sizeof(double));
