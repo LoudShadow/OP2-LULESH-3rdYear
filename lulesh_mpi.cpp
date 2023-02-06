@@ -962,9 +962,9 @@ void initialise(int myRank,
    //! Setup Symmetry Planes Function !HERE
 
    for (int i = 0; i<m_numNode;++i){
-      t_symmX[i] |= FREE_NODE; 
-      t_symmY[i] |= FREE_NODE;
-      t_symmZ[i] |= FREE_NODE;
+      t_symmX[i] = FREE_NODE; 
+      t_symmY[i] = FREE_NODE;
+      t_symmZ[i] = FREE_NODE;
    }
 
    //new Version   
@@ -3545,8 +3545,8 @@ void VerifyAndWriteFinalOutput(double elapsed_time,
    // GrindTime2 takes into account speedups from MPI parallelism.
    // Cast to 64-bit integer to avoid overflows.
    Int8_t nx8 = nx;
-   double grindTime1 = ((elapsed_time*1e6)/cycle)/(nx8*nx8*nx8);
-   double grindTime2 = ((elapsed_time*1e6)/cycle)/(nx8*nx8*nx8*numRanks);
+   double grindTime1 = (((elapsed_time*1e6)/cycle)*numRanks)/((nx8*nx8*nx8));
+   double grindTime2 = ((elapsed_time*1e6)/cycle)/(nx8*nx8*nx8);
 
    int ElemId = 0;
    std::cout << "Run completed:\n";
