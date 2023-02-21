@@ -159,8 +159,12 @@ Additional BSD Notice
 #include <op_seq.h>
 // #include <hdf5.h>
 #include <mpi.h>
-
 #include "lulesh.h"
+
+#include "lulesh-viz.h"
+
+// #include "lulesh-visit.cc"
+
 // #include "const.h"
 int myRank;
 struct cmdLineOpts opts;
@@ -294,6 +298,7 @@ double  m_ssc_low = double(.3333333e-18);
 #include "CalcHydroConstraint.h"
 #include "initStressTerms.h"
 #include "CalcCourantConstraint.h"
+#include "CalcSpeed.h"
 // Define arrays and constants
 // Should maybe be moved to a header file to avoid clutter or to the main function to not be global
 // Element-centered
@@ -3535,6 +3540,8 @@ void ParseCommandLineOptions(int argc, char *argv[],
    }
 }
 
+
+
 void VerifyAndWriteFinalOutput(double elapsed_time,
                                int cycle,
                                int nx,
@@ -3543,7 +3550,7 @@ void VerifyAndWriteFinalOutput(double elapsed_time,
    // GrindTime1 only takes a single domain into account, and is thus a good way to measure
    // processor speed indepdendent of MPI parallelism.
    // GrindTime2 takes into account speedups from MPI parallelism.
-   // Cast to 64-bit integer to avoid overflows.
+   // Cast to 64-bit integer to avoid overflow
    Int8_t nx8 = nx;
    double grindTime1 = (((elapsed_time*1e6)/cycle)*numRanks)/((nx8*nx8*nx8));
    double grindTime2 = ((elapsed_time*1e6)/cycle)/(nx8*nx8*nx8);
@@ -3667,6 +3674,9 @@ void writeFileADHFJ(int myRank,int m_numNodes,double *x,double *y, double *z, ch
    fclose(ptr);
    free(newName);
 }
+
+//Neded to render regiosn in file
+
 
 
 /******************************************/
@@ -3847,6 +3857,9 @@ int main(int argc, char *argv[])
    // readOp2VarsFromHDF5(file);
 
    initOp2Vars();
+   double * speed=(double *)malloc(m_numNode*sizeof(double));
+   op_dat p_speed=op_decl_dat(nodes, 1, "double", speed, "p_speed");
+
    int siz = op_get_size(elems);
    std::cout <<  "Global Size: " << siz << ", Local Elems: " << elems->size << ", Local Nodes: "<< nodes->size << "\n";
    MPI_Barrier(MPI_COMM_WORLD);
@@ -3932,6 +3945,34 @@ int main(int argc, char *argv[])
                    << "dt="     << double(m_deltatime) << "\n";
          std::cout.unsetf(std::ios_base::floatfield);
       }
+
+
+      op_par_loop(CalcSpeed, "CalcSpeed", nodes,
+            op_arg_dat(p_speed, -1, OP_ID, 1, "double", OP_WRITE),
+            op_arg_dat(p_xd, -1, OP_ID, 1, "double", OP_READ),
+            op_arg_dat(p_yd, -1, OP_ID, 1, "double", OP_READ),
+            op_arg_dat(p_zd, -1, OP_ID, 1, "double", OP_READ));   
+   
+
+      writeSiloFile(myRank,
+         m_cycle,
+         g_numElem,
+         g_numNode,
+         m_numElem,
+         m_numNode,
+         nodelist,
+         p_x,
+         p_y,
+         p_z,
+         p_e,
+         p_p,
+         p_v,
+         p_q,
+         p_xd,
+         p_yd,
+         p_zd,
+         p_speed
+         );
    }
 
    op_timers(&cpu_t2, &wall_t2);
@@ -3951,14 +3992,17 @@ int main(int argc, char *argv[])
 
    double *verify_e = (double*) malloc(m_numElem*sizeof(double));
    op_fetch_data(p_e, verify_e);
-   
+
    if ((myRank == 0) && (opts.quiet == 0)) {
       VerifyAndWriteFinalOutput(walltime, m_cycle, opts.nx, numRanks, verify_e);
    }
 
    if (opts.time){op_timing_output();}
 
+   
+   printf("finishing\n");
 
+   op_dump_to_hdf5("/home/joseph/3rdYear/TestOut");
 
    op_exit(); 
 
