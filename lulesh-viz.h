@@ -4,12 +4,15 @@
 
 #include <mpi.h>
 
+#if VIZ_MESH
 extern "C" {
    #include "silo.h"
 }
+#endif
 
-
+#if VIZ_MESH
 int add_udc_mesh( DBfile *db,int g_numNode,int g_numElem,int m_numNode,op_dat p_x,op_dat p_y,op_dat p_z){
+   
    int ok=0;
    const char* coordnames[3] = {"X", "Y", "Z"};
 
@@ -89,6 +92,7 @@ int add_variables(DBfile *db,int myRank,int var_count,op_dat* var,int* flag){
    }
    return ok;
 }
+#endif
 
 export void writeSiloFile(int myRank, int m_cycle,
    int g_numElem,
@@ -110,8 +114,7 @@ export void writeSiloFile(int myRank, int m_cycle,
    op_dat p_speed
    
    ){
-   printf("CALLING MAIN\n");
-
+   #if VIZ_MESH
    //SILO is done in serial only
    DBfile *db;
    char subdirName[32];
@@ -143,6 +146,7 @@ export void writeSiloFile(int myRank, int m_cycle,
    printf("OK value:%d\n",ok);
    DBClose(db);
    // free(nodelist_silo);
-
-   // printf("Must enable -DVIZ_MESH at compile time to vrite to visit\n");
+   #else
+   printf("Must enable -DVIZ_MESH at compile time to vrite to visit\n");
+   #endif
 }
