@@ -51,6 +51,15 @@ int    m_cost; //imbalance cost
 int *m_regElemSize ;   // Size of region sets
 int *m_regNumList ;    // Region number per domain element
 int **m_regElemlist ;  // region indexset 
+int *m_regElemlist_2 ;  // region indexset 
+int* localRegionSize;
+
+int* m_region_i_to_lxim;
+int* m_region_i_to_lxip;
+int* m_region_i_to_letam;
+int* m_region_i_to_letap;
+int* m_region_i_to_lzetam;
+int* m_region_i_to_lzetap;
 
 int* nodelist;
 
@@ -60,6 +69,8 @@ int* letam;
 int* letap;
 int* lzetam;
 int* lzetap;
+
+int local_total_region_size;
 
 int* elemBC;            /* symmetry/free-surface flags for each elem face */
 
@@ -134,6 +145,7 @@ int *g_m_regElemSize ;   // Size of region sets
 int *g_m_regNumList ;    // Region number per domain element
 int **g_m_regElemlist ;  // region indexset 
 
+
 int* g_nodelist;
 
 int* g_lxim; /* element connectivity across each face */
@@ -188,6 +200,15 @@ struct Domain{
    op_map p_letap;
    op_map p_lzetam;
    op_map p_lzetap;
+
+   op_set* region_i;
+   op_map* region_i_to_elems;
+   op_map* region_i_to_lxim;
+   op_map* region_i_to_lxip;
+   op_map* region_i_to_letam;
+   op_map* region_i_to_letap;
+   op_map* region_i_to_lzetam;
+   op_map* region_i_to_lzetap;
 
    op_dat p_x;
    op_dat p_y;
@@ -393,8 +414,9 @@ void allocateNodes(int m_numNode){
 
 static inline
 void allocateVars(int m_numElem,int m_numNodes){
-  allocateElems(m_numElem);
-  allocateNodes(m_numNodes);
+   allocateElems(m_numElem);
+   allocateNodes(m_numNodes);
+   m_regElemSize = (int*) malloc(m_numReg * sizeof(int));
 }
 // ===================================================
 // Allocate all global Nodes
@@ -451,12 +473,147 @@ void allocateGlobalNodes(int g_numNode){
 
 static inline
 void allocateGlobalVars(int g_numElem,int g_numNodes){
-  allocateElems(g_numElem);
-  allocateNodes(g_numNodes);
+  allocateGlobalElems(g_numElem);
+  allocateGlobalNodes(g_numNodes);
 }
 
 static inline
-void distributeGlobalElems(int comm_size, int g_numElem , int numElem, int g_numNode, int numNode){
+void Distribute_sub_mapping(int myRank,int* regionSize,int **regions,int **local_mapping,int tag){   
+   int maxSize=0;
+   for (int i=0; i<m_numReg;i++){
+      if (m_regElemSize[i]>maxSize){
+         maxSize=m_regElemSize[i];
+      }
+   }
+}
+
+static inline 
+int Convert_to_singular(int numReg,int** regions,int* regElemSize, int to_rank, int comm_size,int g_numElem,int tag,int **localValues){
+   printf("HERE 1.2.2\n");
+   int *localRegionSize =(int*)calloc(numReg,sizeof(int));
+   (*localValues)=(int*)malloc(sizeof(int)*g_numElem);
+
+   int start=0;
+   for (int i = 0; i < to_rank; i++)
+   {
+      start=compute_local_size(g_numElem,comm_size,i);
+   }
+   int end=compute_local_size(g_numElem,comm_size,to_rank);
+
+   printf("HERE 1.2.3\n");
+   int index=0;
+   int totalSize;
+   for(int r=0; r<numReg;r++){
+      for(int e=0; e<regElemSize[r];e++){
+         if (regions[r][e]>=start && regions[r][e]<end){
+            (*localValues)[index++]  = regions[r][e];
+            localRegionSize[r]++;
+            totalSize++;
+         }
+      }
+   }
+   printf("HERE 1.3.4\n");
+   MPI_Send(localRegionSize,numReg,MPI_INT,to_rank,tag,MPI_COMM_WORLD);
+   free(localRegionSize);
+   return totalSize;
+}
+
+static inline 
+int map_and_send(int* the_map, int* values,int length,int rank,int tag){
+   int *mapped_values=(int*)malloc(sizeof(int)*length);
+
+   for (int i = 0; i < length; i++)
+   {
+      mapped_values[i]=the_map[values[i]];
+   }
+
+   MPI_Send(mapped_values,length,MPI_INT,rank,tag,MPI_COMM_WORLD);
+   free(mapped_values);
+   
+}
+
+static inline
+void distrbute_Region_Information_seq(int myRank,int comm_size,int g_numElem){
+   int total_local_size;
+   printf("Starting HERE 1.1 \n");
+   if (myRank==0){
+      int start=0;
+      int end=compute_local_size(g_numElem,comm_size,0);
+      m_regElemlist_2 = (int*) malloc(g_numElem * sizeof(int));
+      int index=0;
+      local_total_region_size=0;
+      for(int r=0; r<m_numReg;r++){
+         for(int e=0; e<g_m_regElemSize[r];e++){
+            if (g_m_regElemlist[r][e]>=start && g_m_regElemlist[r][e]<end){
+               m_regElemlist_2[index++]  = g_m_regElemlist[r][e];
+               m_regElemSize[r]++;
+               local_total_region_size++;
+            }
+         }
+      }
+      printf("HERE 1.2.4\n");
+
+
+      for (int rank=1; rank<comm_size;rank++){
+         int *tmp;
+         int **localValues= &tmp;
+         printf("Starting HERE 1.1.1 \n");
+         int size=Convert_to_singular(m_numReg,g_m_regElemlist,g_m_regElemSize,rank,comm_size,g_numElem,0,localValues);
+         MPI_Send(localValues,size,MPI_INT,rank,1,MPI_COMM_WORLD);
+         printf("Starting HERE 1.1.2 \n");
+         map_and_send(g_lxim,*localValues,size,rank,2);
+         map_and_send(g_lxip,*localValues,size,rank,3);
+         map_and_send(g_letam,*localValues,size,rank,4);
+         printf("Starting HERE 1.1.3 \n");
+         map_and_send(g_letap,*localValues,size,rank,5);
+         map_and_send(g_lzetam,*localValues,size,rank,6);
+         map_and_send(g_lzetap,*localValues,size,rank,7);
+         printf("Starting HERE 1.1.4 \n");
+         free(localValues);
+      }
+   }else{
+      printf("Starting HERE 1.2 \n");
+
+      MPI_Recv(m_regElemSize,m_numReg,MPI_INT,0,0,MPI_COMM_WORLD,NULL);
+      local_total_region_size=0;
+      for (int i = 0; i < m_numReg; i++)
+      {
+         local_total_region_size+=m_regElemSize[i];
+      }
+      m_regElemlist_2 = (int*)malloc(m_numReg * local_total_region_size);
+   }
+   printf("HERE 1.4.4\n");
+   m_region_i_to_lxim=(int*)malloc(sizeof(int)*local_total_region_size);
+   m_region_i_to_lxip=(int*)malloc(sizeof(int)*local_total_region_size);
+   m_region_i_to_letam=(int*)malloc(sizeof(int)*local_total_region_size);
+   m_region_i_to_letap=(int*)malloc(sizeof(int)*local_total_region_size);
+   m_region_i_to_lzetam=(int*)malloc(sizeof(int)*local_total_region_size);
+   m_region_i_to_lzetap=(int*)malloc(sizeof(int)*local_total_region_size);
+   printf("HERE 1.4.5\n");
+   if (myRank!=0){
+      MPI_Recv(m_regElemlist_2,local_total_region_size,MPI_INT,0,0,MPI_COMM_WORLD,NULL);
+      MPI_Recv(m_region_i_to_lxim,local_total_region_size,MPI_INT,0,1,MPI_COMM_WORLD,NULL);
+      MPI_Recv(m_region_i_to_lxip,local_total_region_size,MPI_INT,0,2,MPI_COMM_WORLD,NULL);
+      MPI_Recv(m_region_i_to_letam,local_total_region_size,MPI_INT,0,3,MPI_COMM_WORLD,NULL);
+      MPI_Recv(m_region_i_to_letap,local_total_region_size,MPI_INT,0,4,MPI_COMM_WORLD,NULL);
+      MPI_Recv(m_region_i_to_lzetam,local_total_region_size,MPI_INT,0,5,MPI_COMM_WORLD,NULL);
+      MPI_Recv(m_region_i_to_lzetap,local_total_region_size,MPI_INT,0,6,MPI_COMM_WORLD,NULL);
+   }else{
+      printf("HERE 1.4.6\n");
+      for (int i = 0; i < local_total_region_size; i++){m_region_i_to_lxim[i]=g_lxim[m_regElemlist_2[i]];}
+      for (int i = 0; i < local_total_region_size; i++){m_region_i_to_lxip[i]=g_lxip[m_regElemlist_2[i]];}
+      for (int i = 0; i < local_total_region_size; i++){m_region_i_to_letam[i]=g_letam[m_regElemlist_2[i]];}
+      for (int i = 0; i < local_total_region_size; i++){m_region_i_to_letap[i]=g_letap[m_regElemlist_2[i]];}
+      for (int i = 0; i < local_total_region_size; i++){m_region_i_to_lzetam[i]=g_lzetam[m_regElemlist_2[i]];}
+      for (int i = 0; i < local_total_region_size; i++){m_region_i_to_lzetap[i]=g_lzetap[m_regElemlist_2[i]];}
+      printf("HERE 1.4.9\n");
+   }
+
+}
+
+static inline
+void distributeGlobalElems(int myRank,int comm_size, int g_numElem , int numElem, int g_numNode, int numNode){
+   distrbute_Region_Information_seq(myRank,comm_size,g_numElem);
    //Element Information
 
    // g_nodelist = (int*) malloc(g_numElem*8 * sizeof(int));
@@ -574,6 +731,46 @@ Domain initOp2Vars(int m_numElem,int m_numNode){
    domain.p_letap = op_decl_map(domain.elems, domain.elems, 1, letap, "letap");
    domain.p_lzetam = op_decl_map(domain.elems, domain.elems, 1, lzetam, "lzetam");
    domain.p_lzetap = op_decl_map(domain.elems, domain.elems, 1, lzetap, "lzetap");
+
+   domain.region_i = (op_set*)malloc(m_numReg* sizeof(op_set));
+   domain.region_i_to_elems = (op_map*)malloc(m_numReg* sizeof(op_map));
+
+   domain.region_i_to_lxim = (op_map*)malloc(m_numReg* sizeof(op_map));
+   domain.region_i_to_lxip = (op_map*)malloc(m_numReg* sizeof(op_map));
+   domain.region_i_to_letam = (op_map*)malloc(m_numReg* sizeof(op_map));
+   domain.region_i_to_letap = (op_map*)malloc(m_numReg* sizeof(op_map));
+   domain.region_i_to_lzetam = (op_map*)malloc(m_numReg* sizeof(op_map));
+   domain.region_i_to_lzetap = (op_map*)malloc(m_numReg* sizeof(op_map));
+
+
+
+   char regionName[20];
+   char mapName[20];
+   int offset=0;
+   for (int i = 0; i < m_numReg; i++){
+      sprintf(regionName,"region_%d",i);
+      domain.region_i[i] = op_decl_set(m_regElemSize[i], regionName);
+
+      sprintf(mapName,"region_%d_to_elems",i);
+      domain.region_i_to_elems[i] = op_decl_map(domain.region_i[i],domain.elems,1,&(m_regElemlist_2[offset]),mapName);
+
+      sprintf(mapName,"region_%d_to_lxim",i);
+      domain.region_i_to_lxim[i] = op_decl_map(domain.region_i[i],domain.elems,1,&(m_region_i_to_lxim[offset]),mapName);
+      sprintf(mapName,"region_%d_to_lxip",i);
+      domain.region_i_to_lxip[i] = op_decl_map(domain.region_i[i],domain.elems,1,&(m_region_i_to_lxip[offset]),mapName);
+      sprintf(mapName,"region_%d_to_letam",i);
+      domain.region_i_to_letam[i] = op_decl_map(domain.region_i[i],domain.elems,1,&(m_region_i_to_letam[offset]),mapName);
+      sprintf(mapName,"region_%d_to_letap",i);
+      domain.region_i_to_letap[i] = op_decl_map(domain.region_i[i],domain.elems,1,&(m_region_i_to_letap[offset]),mapName);
+      sprintf(mapName,"region_%d_to_lzetam",i);
+      domain.region_i_to_lzetam[i] = op_decl_map(domain.region_i[i],domain.elems,1,&(m_region_i_to_lzetam[offset]),mapName);
+      sprintf(mapName,"region_%d_to_lzetap",i);
+      domain.region_i_to_lzetap[i] = op_decl_map(domain.region_i[i],domain.elems,1,&(m_region_i_to_lzetap[offset]),mapName);
+
+      offset+=m_regElemSize[i];
+   }
+   printf("INIT Done\n");
+
 
    //Node Centred
    domain.p_t_symmX = op_decl_dat(domain.nodes, 1, "int", t_symmX, "t_symmX");
@@ -936,8 +1133,7 @@ void initialise(int myRank,
    // int myRank = 0;
 
    m_numReg = nr;
-   m_regElemSize = (int*) malloc(m_numReg * sizeof(int));
-   m_regElemlist = (int**) malloc(m_numReg * sizeof(int));
+
 
    //! End Create Region Sets
 
@@ -1262,6 +1458,7 @@ void initialiseSingular(int colLoc,
    planeMin = (planeLoc == 0)    ? 0 : 1;
    planeMax = (planeLoc == tp-1) ? 0 : 1;
 
+   printf("HERE NOW 3.1.1\n");
    for(int i=0; i<g_numElem;++i){
       g_p[i] = double(0.0);
       g_e[i] = double(0.0);
@@ -1428,7 +1625,7 @@ void initialiseSingular(int colLoc,
 	      }
          lastReg = regionNum;
       }
-      delete [] g_regBinEnd; 
+      free(g_regBinEnd); 
    }
    // Convert m_regNumList to region index sets
    // First, count size of each region 
@@ -1452,6 +1649,18 @@ void initialiseSingular(int colLoc,
       int regndx = g_m_regElemSize[r]++; // Note increment
 
       g_m_regElemlist[r][regndx] = i;
+   }
+
+   int r=0;
+   int idx=0;
+   for (int i=0 ; i<g_numElem ; ++i) {
+      if (idx >= g_m_regElemSize[r]){
+         idx=0;
+         r++;
+      }
+      // printf("%d\n", g_m_regNumList[i]-1);
+      printf("%d\n", g_m_regElemlist[r][idx]);
+      idx++;
    }
 
 
@@ -1705,17 +1914,19 @@ Domain initialiseALL(struct cmdLineOpts opts,int myRank,Int8_t numRanks){
    //Compute the local size
    int m_numElem =  compute_local_size(g_numElem,(Int8_t)numRanks,myRank);
    int m_numNode =  compute_local_size(g_numNode,(Int8_t)numRanks,myRank);
+   m_numReg = opts.numReg;
 
    allocateVars(m_numElem,m_numNode);
    if (opts.creation == Creation_Parallel){
       initialise( myRank,opts.nx, 1, opts.numReg,opts.balance, opts.cost, numRanks);
    }else if (opts.creation == Creation_Root){
       if (myRank == 0){
-         
+         printf("HERE 0,0.1\n");
          allocateGlobalVars(g_numElem,g_numNode);
+         printf("HERE 0,0.2\n");
          initialiseSingular(0,0,0,opts.nx,1,opts.numReg,opts.balance, opts.cost,(Int8_t)numRanks);
       }
-      distributeGlobalElems(numRanks,g_numElem,m_numElem,g_numNode,m_numNode);
+      distributeGlobalElems(myRank,numRanks,g_numElem,m_numElem,g_numNode,m_numNode);
    }
    MPI_Bcast(&m_deltatime,1,MPI_DOUBLE,0,MPI_COMM_WORLD);
 
