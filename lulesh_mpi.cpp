@@ -1227,6 +1227,9 @@ void CalcMonotonicQForElems()
    // Code is left here for future reference
    // for (int r=0 ; r<domain.numReg() ; ++r) {
    for (int r=0 ; r<m_numReg ; ++r) {
+      if (m_regElemSize[r]==0){
+         continue;
+      }
       // if (domain.regElemSize(r) > 0) {
       // if (m_regElemSize[r] > 0) {
       if(m_numElem > 0){
@@ -1264,118 +1267,114 @@ void CalcQForElems()
 /******************************************/
 
 static inline
-void CalcPressureForElemsHalfstep()
+void CalcPressureForElemsHalfstep(int region)
 {
-   op_par_loop(CalcHalfStepBVC, "CalcHalfStepBVC", domain.elems,
-               op_arg_dat(domain.p_bvc, -1, OP_ID, 1, "double", OP_WRITE),
-               op_arg_dat(domain.p_compHalfStep, -1, OP_ID, 1, "double", OP_READ),
-               op_arg_dat(domain.p_pbvc, -1, OP_ID, 1, "double", OP_WRITE));
+   op_set current_set= domain.region_i[region];
+   op_map current_map = domain.region_i_to_elems[region];
+   op_par_loop(CalcHalfStepBVC, "CalcHalfStepBVC", current_set,
+               op_arg_dat(domain.p_bvc, 0, current_map, 1, "double", OP_WRITE),
+               op_arg_dat(domain.p_compHalfStep, 0, current_map, 1, "double", OP_READ),
+               op_arg_dat(domain.p_pbvc, 0, current_map, 1, "double", OP_WRITE));
 
    //NOTE changed p_pHalfStep to write review
-   op_par_loop(CalcPHalfstep, "CalcPHalfstep", domain.elems,
-               op_arg_dat(domain.p_pHalfStep, -1, OP_ID, 1, "double", OP_WRITE),
-               op_arg_dat(domain.p_bvc, -1, OP_ID, 1, "double", OP_READ),
-               op_arg_dat(domain.p_e_new, -1, OP_ID, 1, "double", OP_READ),
-               op_arg_dat(domain.p_vnewc, -1, OP_ID, 1, "double", OP_READ)
+   op_par_loop(CalcPHalfstep, "CalcPHalfstep", current_set,
+               op_arg_dat(domain.p_pHalfStep, 0, current_map, 1, "double", OP_WRITE),
+               op_arg_dat(domain.p_bvc, 0, current_map, 1, "double", OP_READ),
+               op_arg_dat(domain.p_e_new, 0, current_map, 1, "double", OP_READ),
+               op_arg_dat(domain.p_vnewc, 0, current_map, 1, "double", OP_READ)
                );
 }
 
 static inline
-void CalcPressureForElems()
+void CalcPressureForElems(int region)
 {
-   op_par_loop(CalcBVC, "CalcBVC", domain.elems,
-               op_arg_dat(domain.p_bvc, -1, OP_ID, 1, "double", OP_WRITE),
-               op_arg_dat(domain.p_compression, -1, OP_ID, 1, "double", OP_READ),
-               op_arg_dat(domain.p_pbvc, -1, OP_ID, 1, "double", OP_WRITE));
+   op_set current_set= domain.region_i[region];
+   op_map current_map = domain.region_i_to_elems[region];
+   op_par_loop(CalcBVC, "CalcBVC", current_set,
+               op_arg_dat(domain.p_bvc, 0, current_map, 1, "double", OP_WRITE),
+               op_arg_dat(domain.p_compression, 0, current_map, 1, "double", OP_READ),
+               op_arg_dat(domain.p_pbvc, 0, current_map, 1, "double", OP_WRITE));
 
 
-   op_par_loop(CalcPNew, "CalcPNew", domain.elems,
-               op_arg_dat(domain.p_p_new, -1, OP_ID, 1, "double", OP_WRITE),
-               op_arg_dat(domain.p_bvc, -1, OP_ID, 1, "double", OP_READ),
-               op_arg_dat(domain.p_e_new, -1, OP_ID, 1, "double", OP_READ),
-               op_arg_dat(domain.p_vnewc, -1, OP_ID, 1, "double", OP_READ)
+   op_par_loop(CalcPNew, "CalcPNew", current_set,0
+               op_arg_dat(domain.p_p_new, 0, current_map, 1, "double", OP_WRITE),
+               op_arg_dat(domain.p_bvc, 0, current_map, 1, "double", OP_READ),
+               op_arg_dat(domain.p_e_new, 0, current_map, 1, "double", OP_READ),
+               op_arg_dat(domain.p_vnewc, 0, current_map, 1, "double", OP_READ)
                );
 }
 
 /******************************************/
 
 static inline
-void CalcEnergyForElems(double* p_new, double* e_new, double* q_new,
-                        double* bvc, double* pbvc,
-                        double* p_old, double* e_old, double* q_old,
-                        double* compression, double* compHalfStep,
-                        double* vnewc, double* work, double* delvc, double pmin,
-                        double p_cut, double  e_cut, double q_cut, double emin,
-                        double* qq_old, double* ql_old,
-                        double rho0,
-                        double eosvmax,
-                        int length, int *regElemList)
+void CalcEnergyForElems(int region)
 {
    // double *pHalfStep = Allocate<double>(length) ;
+   op_set current_set= domain.region_i[region];
+   op_map current_map = domain.region_i_to_elems[region];
 
-
-   op_par_loop(CalcNewE, "CalcNewE", domain.elems,
-               op_arg_dat(domain.p_e_new, -1, OP_ID, 1, "double", OP_WRITE),
-               op_arg_dat(domain.p_e_old, -1, OP_ID, 1, "double", OP_READ),
-               op_arg_dat(domain.p_delvc, -1, OP_ID, 1, "double", OP_READ),
-               op_arg_dat(domain.p_p_old, -1, OP_ID, 1, "double", OP_READ),
-               op_arg_dat(domain.p_q_old, -1, OP_ID, 1, "double", OP_READ),
-               op_arg_dat(domain.p_work, -1, OP_ID, 1, "double", OP_READ)
+   op_par_loop(CalcNewE, "CalcNewE", current_set,
+               op_arg_dat(domain.p_e_new, 0, current_map, 1, "double", OP_WRITE),
+               op_arg_dat(domain.p_e_old, 0, current_map, 1, "double", OP_READ),
+               op_arg_dat(domain.p_delvc, 0, current_map, 1, "double", OP_READ),
+               op_arg_dat(domain.p_p_old, 0, current_map, 1, "double", OP_READ),
+               op_arg_dat(domain.p_q_old, 0, current_map, 1, "double", OP_READ),
+               op_arg_dat(domain.p_work, 0, current_map, 1, "double", OP_READ)
    );
 
-   CalcPressureForElemsHalfstep();
+   CalcPressureForElemsHalfstep(region);
 
    //NOTE domain.p_e_new may be an INC
-   op_par_loop(CalcNewEStep2, "CalcNewEStep2", domain.elems,
-               op_arg_dat(domain.p_compHalfStep, -1, OP_ID, 1, "double", OP_READ),
-               op_arg_dat(domain.p_delvc, -1, OP_ID, 1, "double", OP_READ),
-               op_arg_dat(domain.p_q_new, -1, OP_ID, 1, "double", OP_RW),
-               op_arg_dat(domain.p_pbvc, -1, OP_ID, 1, "double", OP_READ),
-               op_arg_dat(domain.p_e_new, -1, OP_ID, 1, "double", OP_RW),
-               op_arg_dat(domain.p_bvc, -1, OP_ID, 1, "double", OP_READ),
-               op_arg_dat(domain.p_pHalfStep, -1, OP_ID, 1, "double", OP_READ),
-               op_arg_dat(domain.p_ql_old, -1, OP_ID, 1, "double", OP_READ),
-               op_arg_dat(domain.p_qq_old, -1, OP_ID, 1, "double", OP_READ),
-               op_arg_dat(domain.p_p_old, -1, OP_ID, 1, "double", OP_READ),
-               op_arg_dat(domain.p_q_old, -1, OP_ID, 1, "double", OP_READ)
+   op_par_loop(CalcNewEStep2, "CalcNewEStep2", current_set,
+               op_arg_dat(domain.p_compHalfStep, 0, current_map, 1, "double", OP_READ),
+               op_arg_dat(domain.p_delvc, 0, current_map, 1, "double", OP_READ),
+               op_arg_dat(domain.p_q_new, 0, current_map, 1, "double", OP_RW),
+               op_arg_dat(domain.p_pbvc, 0, current_map, 1, "double", OP_READ),
+               op_arg_dat(domain.p_e_new, 0, current_map, 1, "double", OP_RW),
+               op_arg_dat(domain.p_bvc, 0, current_map, 1, "double", OP_READ),
+               op_arg_dat(domain.p_pHalfStep, 0, current_map, 1, "double", OP_READ),
+               op_arg_dat(domain.p_ql_old, 0, current_map, 1, "double", OP_READ),
+               op_arg_dat(domain.p_qq_old, 0, current_map, 1, "double", OP_READ),
+               op_arg_dat(domain.p_p_old, 0, current_map, 1, "double", OP_READ),
+               op_arg_dat(domain.p_q_old, 0, current_map, 1, "double", OP_READ)
    );
 
    //NOTE domain.p_e_new may be an INC
-   op_par_loop(CalcNewEStep3, "CalcNewEStep3", domain.elems,
-               op_arg_dat(domain.p_e_new, -1, OP_ID, 1, "double", OP_RW),
-               op_arg_dat(domain.p_work, -1, OP_ID, 1, "double", OP_READ)
+   op_par_loop(CalcNewEStep3, "CalcNewEStep3", current_set,
+               op_arg_dat(domain.p_e_new, 0, current_map, 1, "double", OP_RW),
+               op_arg_dat(domain.p_work, 0, current_map, 1, "double", OP_READ)
    );
 
-   CalcPressureForElems();
+   CalcPressureForElems(region);
 
    //NOTE domain.p_e_new may be an INC
-   op_par_loop(CalcNewEStep4, "CalcNewEStep4", domain.elems,
-               op_arg_dat(domain.p_delvc, -1, OP_ID, 1, "double", OP_READ),
-               op_arg_dat(domain.p_pbvc, -1, OP_ID, 1, "double", OP_READ),
-               op_arg_dat(domain.p_e_new, -1, OP_ID, 1, "double", OP_RW),
-               op_arg_dat(domain.p_vnewc, -1, OP_ID, 1, "double", OP_READ),
-               op_arg_dat(domain.p_bvc, -1, OP_ID, 1, "double", OP_READ),
-               op_arg_dat(domain.p_p_new, -1, OP_ID, 1, "double", OP_READ),
-               op_arg_dat(domain.p_ql_old, -1, OP_ID, 1, "double", OP_READ),
-               op_arg_dat(domain.p_qq_old, -1, OP_ID, 1, "double", OP_READ),
-               op_arg_dat(domain.p_p_old, -1, OP_ID, 1, "double", OP_READ),
-               op_arg_dat(domain.p_q_old, -1, OP_ID, 1, "double", OP_READ),
-               op_arg_dat(domain.p_q_new, -1, OP_ID, 1, "double", OP_READ),
-               op_arg_dat(domain.p_pHalfStep, -1, OP_ID, 1, "double", OP_READ)
+   op_par_loop(CalcNewEStep4, "CalcNewEStep4", current_set,
+               op_arg_dat(domain.p_delvc, 0, current_map, 1, "double", OP_READ),
+               op_arg_dat(domain.p_pbvc, 0, current_map, 1, "double", OP_READ),
+               op_arg_dat(domain.p_e_new, 0, current_map, 1, "double", OP_RW),
+               op_arg_dat(domain.p_vnewc, 0, current_map, 1, "double", OP_READ),
+               op_arg_dat(domain.p_bvc, 0, current_map, 1, "double", OP_READ),
+               op_arg_dat(domain.p_p_new, 0, current_map, 1, "double", OP_READ),
+               op_arg_dat(domain.p_ql_old, 0, current_map, 1, "double", OP_READ),
+               op_arg_dat(domain.p_qq_old, 0, current_map, 1, "double", OP_READ),
+               op_arg_dat(domain.p_p_old, 0, current_map, 1, "double", OP_READ),
+               op_arg_dat(domain.p_q_old, 0, current_map, 1, "double", OP_READ),
+               op_arg_dat(domain.p_q_new, 0, current_map, 1, "double", OP_READ),
+               op_arg_dat(domain.p_pHalfStep, 0, current_map, 1, "double", OP_READ)
    );
 
-   CalcPressureForElems();
+   CalcPressureForElems(region);
    //NOTE p_q_new could probably be a write
-   op_par_loop(CalcQNew, "CalcQNew", domain.elems,
-               op_arg_dat(domain.p_delvc, -1, OP_ID, 1, "double", OP_READ),
-               op_arg_dat(domain.p_pbvc, -1, OP_ID, 1, "double", OP_READ),
-               op_arg_dat(domain.p_e_new, -1, OP_ID, 1, "double", OP_READ),
-               op_arg_dat(domain.p_vnewc, -1, OP_ID, 1, "double", OP_READ),
-               op_arg_dat(domain.p_bvc, -1, OP_ID, 1, "double", OP_READ),
-               op_arg_dat(domain.p_p_new, -1, OP_ID, 1, "double", OP_READ),
-               op_arg_dat(domain.p_q_new, -1, OP_ID, 1, "double", OP_RW),
-               op_arg_dat(domain.p_ql_old, -1, OP_ID, 1, "double", OP_READ),
-               op_arg_dat(domain.p_qq_old, -1, OP_ID, 1, "double", OP_READ)
+   op_par_loop(CalcQNew, "CalcQNew", current_set,
+               op_arg_dat(domain.p_delvc, 0, current_map, 1, "double", OP_READ),
+               op_arg_dat(domain.p_pbvc, 0, current_map, 1, "double", OP_READ),
+               op_arg_dat(domain.p_e_new, 0, current_map, 1, "double", OP_READ),
+               op_arg_dat(domain.p_vnewc, 0, current_map, 1, "double", OP_READ),
+               op_arg_dat(domain.p_bvc, 0, current_map, 1, "double", OP_READ),
+               op_arg_dat(domain.p_p_new, 0, current_map, 1, "double", OP_READ),
+               op_arg_dat(domain.p_q_new, 0, current_map, 1, "double", OP_RW),
+               op_arg_dat(domain.p_ql_old, 0, current_map, 1, "double", OP_READ),
+               op_arg_dat(domain.p_qq_old, 0, current_map, 1, "double", OP_READ)
                );
    
 
@@ -1385,15 +1384,17 @@ void CalcEnergyForElems(double* p_new, double* e_new, double* q_new,
 /******************************************/
 
 static inline
-void CalcSoundSpeedForElems()
+void CalcSoundSpeedForElems(int region)
 {
-   op_par_loop(CalcSoundSpeedForElem, "CalcSoundSpeedForElem", domain.elems,
-               op_arg_dat(domain.p_pbvc, -1, OP_ID, 1, "double", OP_READ),
-               op_arg_dat(domain.p_e_new, -1, OP_ID, 1, "double", OP_READ),
-               op_arg_dat(domain.p_vnewc, -1, OP_ID, 1, "double", OP_READ),
-               op_arg_dat(domain.p_bvc, -1, OP_ID, 1, "double", OP_READ),
-               op_arg_dat(domain.p_p_new, -1, OP_ID, 1, "double", OP_READ),
-               op_arg_dat(domain.p_ss, -1, OP_ID, 1, "double", OP_WRITE)
+   op_set current_set= domain.region_i[region];
+   op_map current_map = domain.region_i_to_elems[region];
+   op_par_loop(CalcSoundSpeedForElem, "CalcSoundSpeedForElem", current_set,
+               op_arg_dat(domain.p_pbvc, 0, current_map, 1, "double", OP_READ),
+               op_arg_dat(domain.p_e_new, 0, current_map, 1, "double", OP_READ),
+               op_arg_dat(domain.p_vnewc, 0, current_map, 1, "double", OP_READ),
+               op_arg_dat(domain.p_bvc, 0, current_map, 1, "double", OP_READ),
+               op_arg_dat(domain.p_p_new, 0, current_map, 1, "double", OP_READ),
+               op_arg_dat(domain.p_ss, 0, current_map, 1, "double", OP_WRITE)
                );
 }
 
@@ -1414,66 +1415,64 @@ void EvalEOSForElems(int region, int rep)
    double emin    = m_emin ;
    double rho0    = m_refdens ;
 
-   // These temporaries will be of different size for 
+   // These temporaries will be of different size for OP_ID
    // each call (due to different sized region element
    // lists)
+
+   op_set current_set= domain.region_i[region];
+   op_map current_map = domain.region_i_to_elems[region];
 
    //loop to add load imbalance based on region number 
    for(int j = 0; j < rep; j++) {
       /* compress data, minimal set */
 
-         op_par_loop(CopyEOSValsIntoArray, "CopyEOSValsIntoArray", domain.elems,
-                     op_arg_dat(domain.p_e_old, -1, OP_ID, 1, "double", OP_WRITE), op_arg_dat(domain.p_e, -1, OP_ID, 1, "double", OP_READ),
-                     op_arg_dat(domain.p_delvc, -1, OP_ID, 1, "double", OP_WRITE), op_arg_dat(domain.p_delv, -1, OP_ID, 1, "double", OP_READ),
-                     op_arg_dat(domain.p_p_old, -1, OP_ID, 1, "double", OP_WRITE), op_arg_dat(domain.p_p, -1, OP_ID, 1, "double", OP_READ),
-                     op_arg_dat(domain.p_q_old, -1, OP_ID, 1, "double", OP_WRITE), op_arg_dat(domain.p_q, -1, OP_ID, 1, "double", OP_READ),
-                     op_arg_dat(domain.p_qq_old, -1, OP_ID, 1, "double", OP_WRITE), op_arg_dat(domain.p_qq, -1, OP_ID, 1, "double", OP_READ),
-                     op_arg_dat(domain.p_ql_old, -1, OP_ID, 1, "double", OP_WRITE), op_arg_dat(domain.p_ql, -1, OP_ID, 1, "double", OP_READ));
+         op_par_loop(CopyEOSValsIntoArray, "CopyEOSValsIntoArray", current_set,
+                     op_arg_dat(domain.p_e_old, 0, current_map, 1, "double", OP_WRITE), op_arg_dat(domain.p_e, 0, current_map, 1, "double", OP_READ),
+                     op_arg_dat(domain.p_delvc, 0, current_map, 1, "double", OP_WRITE), op_arg_dat(domain.p_delv, 0, current_map, 1, "double", OP_READ),
+                     op_arg_dat(domain.p_p_old, 0, current_map, 1, "double", OP_WRITE), op_arg_dat(domain.p_p, 0, current_map, 1, "double", OP_READ),
+                     op_arg_dat(domain.p_q_old, 0, current_map, 1, "double", OP_WRITE), op_arg_dat(domain.p_q, 0, current_map, 1, "double", OP_READ),
+                     op_arg_dat(domain.p_qq_old, 0, current_map, 1, "double", OP_WRITE), op_arg_dat(domain.p_qq, 0, current_map, 1, "double", OP_READ),
+                     op_arg_dat(domain.p_ql_old, 0, current_map, 1, "double", OP_WRITE), op_arg_dat(domain.p_ql, 0, current_map, 1, "double", OP_READ));
 
-         op_par_loop(CalcHalfSteps, "CalcHalfSteps", domain.elems,
-                     op_arg_dat(domain.p_compression, -1, OP_ID, 1, "double", OP_WRITE),
-                     op_arg_dat(domain.p_vnewc, -1, OP_ID, 1, "double", OP_READ),
-                     op_arg_dat(domain.p_delvc, -1, OP_ID, 1, "double", OP_READ),
-                     op_arg_dat(domain.p_compHalfStep, -1, OP_ID, 1, "double", OP_WRITE)
+         op_par_loop(CalcHalfSteps, "CalcHalfSteps", current_set,
+                     op_arg_dat(domain.p_compression, 0, current_map, 1, "double", OP_WRITE),
+                     op_arg_dat(domain.p_vnewc, 0, current_map, 1, "double", OP_READ),
+                     op_arg_dat(domain.p_delvc, 0, current_map, 1, "double", OP_READ),
+                     op_arg_dat(domain.p_compHalfStep, 0, current_map, 1, "double", OP_WRITE)
          );
 
 
       /* Check for v > eosvmax or v < eosvmin */
          if ( eosvmin != double(0.) ) {
-            op_par_loop(CheckEOSLowerBound, "CheckEOSLowerBound", domain.elems,
-                        op_arg_dat(domain.p_vnewc, -1, OP_ID, 1, "double", OP_READ),
-                        op_arg_dat(domain.p_compHalfStep, -1, OP_ID, 1, "double", OP_WRITE),
-                        op_arg_dat(domain.p_compression, -1, OP_ID, 1, "double", OP_READ)
+            op_par_loop(CheckEOSLowerBound, "CheckEOSLowerBound", current_set,
+                        op_arg_dat(domain.p_vnewc, 0, current_map, 1, "double", OP_READ),
+                        op_arg_dat(domain.p_compHalfStep, 0, current_map, 1, "double", OP_WRITE),
+                        op_arg_dat(domain.p_compression, 0, current_map, 1, "double", OP_READ)
             );
 
          }
          if ( eosvmax != double(0.) ) {
-            op_par_loop(CheckEOSUpperBound, "CheckEOSUpperBound", domain.elems,
-                        op_arg_dat(domain.p_vnewc, -1, OP_ID, 1, "double", OP_READ),
-                        op_arg_dat(domain.p_compHalfStep, -1, OP_ID, 1, "double", OP_WRITE),
-                        op_arg_dat(domain.p_compression, -1, OP_ID, 1, "double", OP_WRITE),
-                        op_arg_dat(domain.p_p_old, -1, OP_ID, 1, "double", OP_WRITE)
+            op_par_loop(CheckEOSUpperBound, "CheckEOSUpperBound", current_set,
+                        op_arg_dat(domain.p_vnewc, 0, current_map, 1, "double", OP_READ),
+                        op_arg_dat(domain.p_compHalfStep, 0, current_map, 1, "double", OP_WRITE),
+                        op_arg_dat(domain.p_compression, 0, current_map, 1, "double", OP_WRITE),
+                        op_arg_dat(domain.p_p_old, 0, current_map, 1, "double", OP_WRITE)
             );
 
          }
-         op_par_loop(CalcEOSWork, "CalcEOSWork", domain.elems,
-                     op_arg_dat(domain.p_work, -1, OP_ID, 1 , "double", OP_WRITE));
+         op_par_loop(CalcEOSWork, "CalcEOSWork", current_set,
+                     op_arg_dat(domain.p_work, 0, current_map, 1 , "double", OP_WRITE));
 
-      CalcEnergyForElems(p_new, e_new, q_new, bvc, pbvc,
-                         p_old, e_old,  q_old, compression, compHalfStep,
-                         vnewc, work,  delvc, pmin,
-                         p_cut, e_cut, q_cut, emin,
-                         qq_old, ql_old, rho0, eosvmax,
-                         m_regElemSize[0], m_regElemlist[0]);
+      CalcEnergyForElems(region);
    }
 
-   op_par_loop(CopyTempEOSVarsBack, "CopyTempEOSVarsBack", domain.elems,
-               op_arg_dat(domain.p_p, -1, OP_ID, 1, "double", OP_WRITE), op_arg_dat(domain.p_p_new, -1, OP_ID, 1, "double", OP_READ),
-               op_arg_dat(domain.p_e, -1, OP_ID, 1, "double", OP_WRITE), op_arg_dat(domain.p_e_new, -1, OP_ID, 1, "double", OP_READ),
-               op_arg_dat(domain.p_q, -1, OP_ID, 1, "double", OP_WRITE), op_arg_dat(domain.p_q_new, -1, OP_ID, 1, "double", OP_READ)
+   op_par_loop(CopyTempEOSVarsBack, "CopyTempEOSVarsBack", current_set,
+               op_arg_dat(domain.p_p, 0, current_map, 1, "double", OP_WRITE), op_arg_dat(domain.p_p_new, 0, current_map, 1, "double", OP_READ),
+               op_arg_dat(domain.p_e, 0, current_map, 1, "double", OP_WRITE), op_arg_dat(domain.p_e_new, 0, current_map, 1, "double", OP_READ),
+               op_arg_dat(domain.p_q, 0, current_map, 1, "double", OP_WRITE), op_arg_dat(domain.p_q_new, 0, current_map, 1, "double", OP_READ)
    );
 
-   CalcSoundSpeedForElems() ;
+   CalcSoundSpeedForElems(region) ;
 
 
 }
@@ -1519,25 +1518,26 @@ void ApplyMaterialPropertiesForElems()
 
     
 
-   //  for (int r=0 ; r<m_numReg ; r++) {
-   //     int numElemReg = m_regElemSize[r];
-   //     int *regElemList = m_regElemlist[r];
-   //     int rep;
-   //     //Determine load imbalance for this region
-   //     //round down the number with lowest cost
-   //     //  if(r < domain.numReg()/2)
-   //    if(r < m_numReg/2)
-   //       rep = 1;
-   //       //you don't get an expensive region unless you at least have 5 regions
-   //    else if(r < (m_numReg - (m_numReg+15)/20))
-   //       rep = 1 + m_cost;
-   //     //very expensive regions
-   //    else
-   //       rep = 10 * (1+ m_cost);
-   //    //    MPI_Barrier(MPI_COMM_WORLD);
-   //    //    op_print("Eval EOS");
-       EvalEOSForElems( 0 , 1);
-   // }
+    for (int r=0 ; r<m_numReg ; r++) {
+      if (m_regElemSize[r]==0){
+         continue;
+      }
+       int rep;
+       //Determine load imbalance for this region
+       //round down the number with lowest cost
+       //  if(r < domain.numReg()/2)
+      if(r < m_numReg/2)
+         rep = 1;
+         //you don't get an expensive region unless you at least have 5 regions
+      else if(r < (m_numReg - (m_numReg+15)/20))
+         rep = 1 + m_cost;
+       //very expensive regions
+      else
+         rep = 10 * (1+ m_cost);
+      //    MPI_Barrier(MPI_COMM_WORLD);
+      //    op_print("Eval EOS");
+       EvalEOSForElems( r , rep);
+   }
 
    //  Release(&vnewc) ;
   }
@@ -1622,6 +1622,9 @@ void CalcTimeConstraintsForElems() {
    m_dthydro = 1.0e+20;
 
    for (int r=0 ; r < m_numReg ; ++r) { 
+      if (m_regElemSize[r]==0){
+         continue;
+      }
       /* evaluate time constraint */
       CalcCourantConstraintForElems(r) ;
 

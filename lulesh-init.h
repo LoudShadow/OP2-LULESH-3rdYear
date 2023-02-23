@@ -491,7 +491,7 @@ static inline
 int Convert_to_singular(int numReg,int** regions,int* regElemSize, int to_rank, int comm_size,int g_numElem,int tag,int **localValues){
    printf("HERE 1.2.2\n");
    int *localRegionSize =(int*)calloc(numReg,sizeof(int));
-   (*localValues)=(int*)malloc(sizeof(int)*g_numElem);
+   int *localValues_Local=(int*)malloc(sizeof(int)*g_numElem);
 
    int start=0;
    for (int i = 0; i < to_rank; i++)
@@ -506,15 +506,16 @@ int Convert_to_singular(int numReg,int** regions,int* regElemSize, int to_rank, 
    for(int r=0; r<numReg;r++){
       for(int e=0; e<regElemSize[r];e++){
          if (regions[r][e]>=start && regions[r][e]<end){
-            (*localValues)[index++]  = regions[r][e];
+            localValues_Local[index++]  = regions[r][e];
             localRegionSize[r]++;
             totalSize++;
          }
       }
    }
-   printf("HERE 1.3.4\n");
+   localValues[0]=localValues_Local;
    MPI_Send(localRegionSize,numReg,MPI_INT,to_rank,tag,MPI_COMM_WORLD);
    free(localRegionSize);
+   localRegionSize=NULL;
    return totalSize;
 }
 
@@ -529,7 +530,7 @@ int map_and_send(int* the_map, int* values,int length,int rank,int tag){
 
    MPI_Send(mapped_values,length,MPI_INT,rank,tag,MPI_COMM_WORLD);
    free(mapped_values);
-   
+   mapped_values=NULL;
 }
 
 static inline
@@ -543,6 +544,7 @@ void distrbute_Region_Information_seq(int myRank,int comm_size,int g_numElem){
       int index=0;
       local_total_region_size=0;
       for(int r=0; r<m_numReg;r++){
+         m_regElemSize[r]=0;
          for(int e=0; e<g_m_regElemSize[r];e++){
             if (g_m_regElemlist[r][e]>=start && g_m_regElemlist[r][e]<end){
                m_regElemlist_2[index++]  = g_m_regElemlist[r][e];
@@ -552,24 +554,22 @@ void distrbute_Region_Information_seq(int myRank,int comm_size,int g_numElem){
          }
       }
       printf("HERE 1.2.4\n");
+      printf("offset -1.0 %d\n",m_regElemSize[0]);
+
 
 
       for (int rank=1; rank<comm_size;rank++){
          int *tmp;
          int **localValues= &tmp;
-         printf("Starting HERE 1.1.1 \n");
          int size=Convert_to_singular(m_numReg,g_m_regElemlist,g_m_regElemSize,rank,comm_size,g_numElem,0,localValues);
          MPI_Send(localValues,size,MPI_INT,rank,1,MPI_COMM_WORLD);
-         printf("Starting HERE 1.1.2 \n");
          map_and_send(g_lxim,*localValues,size,rank,2);
          map_and_send(g_lxip,*localValues,size,rank,3);
          map_and_send(g_letam,*localValues,size,rank,4);
-         printf("Starting HERE 1.1.3 \n");
          map_and_send(g_letap,*localValues,size,rank,5);
          map_and_send(g_lzetam,*localValues,size,rank,6);
          map_and_send(g_lzetap,*localValues,size,rank,7);
-         printf("Starting HERE 1.1.4 \n");
-         free(localValues);
+         free(*localValues);
       }
    }else{
       printf("Starting HERE 1.2 \n");
@@ -606,7 +606,7 @@ void distrbute_Region_Information_seq(int myRank,int comm_size,int g_numElem){
       for (int i = 0; i < local_total_region_size; i++){m_region_i_to_letap[i]=g_letap[m_regElemlist_2[i]];}
       for (int i = 0; i < local_total_region_size; i++){m_region_i_to_lzetam[i]=g_lzetam[m_regElemlist_2[i]];}
       for (int i = 0; i < local_total_region_size; i++){m_region_i_to_lzetap[i]=g_lzetap[m_regElemlist_2[i]];}
-      printf("HERE 1.4.9\n");
+
    }
 
 }
@@ -614,7 +614,8 @@ void distrbute_Region_Information_seq(int myRank,int comm_size,int g_numElem){
 static inline
 void distributeGlobalElems(int myRank,int comm_size, int g_numElem , int numElem, int g_numNode, int numNode){
    distrbute_Region_Information_seq(myRank,comm_size,g_numElem);
-   //Element Information
+
+  //Element Information
 
    // g_nodelist = (int*) malloc(g_numElem*8 * sizeof(int));
    // g_lxim = (int*) malloc(g_numElem * sizeof(int));
@@ -747,11 +748,21 @@ Domain initOp2Vars(int m_numElem,int m_numNode){
    char regionName[20];
    char mapName[20];
    int offset=0;
+   printf("STARTING maping\n");
    for (int i = 0; i < m_numReg; i++){
+      if (m_regElemSize[i]==0){
+         printf("CONTINUING\n");
+         continue;
+      }
+      printf("offset 1.0 %d\n",m_regElemSize[i]);
+
       sprintf(regionName,"region_%d",i);
       domain.region_i[i] = op_decl_set(m_regElemSize[i], regionName);
 
+      printf("offset 1.0\n");
       sprintf(mapName,"region_%d_to_elems",i);
+      printf("offset 1.2 %d\n",m_regElemlist_2[0]);
+
       domain.region_i_to_elems[i] = op_decl_map(domain.region_i[i],domain.elems,1,&(m_regElemlist_2[offset]),mapName);
 
       sprintf(mapName,"region_%d_to_lxim",i);
@@ -769,6 +780,8 @@ Domain initOp2Vars(int m_numElem,int m_numNode){
 
       offset+=m_regElemSize[i];
    }
+   printf("ENDING maping\n");
+
    printf("INIT Done\n");
 
 
@@ -1447,7 +1460,6 @@ void initialiseSingular(int colLoc,
    printf("%d %d %d %d %d\n",g_sizeX,g_sizeY,g_sizeZ,g_numElem,g_numNode);
 
 
-   g_m_regNumList = (int*) malloc(g_numElem * sizeof(int));
 
    printf("HERE NOW 3.1\n");
    //! Setup Comm Buffer, Should not be necessary in final app
@@ -1550,7 +1562,9 @@ void initialiseSingular(int colLoc,
 
    m_numReg = nr;
    g_m_regElemSize = (int*) malloc(m_numReg * sizeof(int));
-   g_m_regElemlist = (int**) malloc(m_numReg * sizeof(int));
+   g_m_regElemlist = (int**) malloc(m_numReg * sizeof(int*));
+   g_m_regNumList = (int*) malloc(g_numElem * sizeof(int));
+
    int nextIndex = 0;
    //if we only have one region just fill it
    // Fill out the regNumList with material numbers, which are always
@@ -1631,25 +1645,40 @@ void initialiseSingular(int colLoc,
    // First, count size of each region 
       printf("HERE NOW 3.4.3\n");
 
+
    for (int i=0 ; i<g_numElem ; ++i) {
       int r = g_m_regNumList[i]-1; // region index == regnum-1
       g_m_regElemSize[r]++;
    }
+   printf("=======================================\n");
+   for (int i = 0; i < m_numReg; i++)
+   {
+      printf("size of %d : %d , %p\n",i,g_m_regElemSize[i],g_m_regElemlist[i]);
+   }
+   printf("=======================================\n");
    // Second, allocate each region index set
    for (int i=0 ; i<m_numReg ; ++i) {
       g_m_regElemlist[i] = (int*) malloc(g_m_regElemSize[i]*sizeof(int));
       g_m_regElemSize[i] = 0;
    }
-         printf("HERE NOW 3.4.4\n");
 
    // Third, fill index sets
    for (int i=0 ; i<g_numElem ; ++i) {
-
       int r = g_m_regNumList[i]-1;       // region index == regnum-1
       int regndx = g_m_regElemSize[r]++; // Note increment
-
+      printf("size of %d %d %d: %d , %p %p\n",i,r,regndx,g_m_regElemSize[r],g_m_regElemlist[r],g_m_regElemlist);
       g_m_regElemlist[r][regndx] = i;
+      printf("       check 6 %d %d : %d , %p %p\n",6,6,g_m_regElemSize[6],g_m_regElemlist[6],g_m_regElemlist);
+
+
    }
+   printf("=======================================\n");
+   for (int i = 0; i < m_numReg; i++)
+   {
+      printf("size of %d : %d , %p\n",i,g_m_regElemSize[i],g_m_regElemlist[i]);
+   }
+   printf("=======================================\n");
+   printf("HERE NOW 3.4.4.1\n");
 
    int r=0;
    int idx=0;
@@ -1659,7 +1688,6 @@ void initialiseSingular(int colLoc,
          r++;
       }
       // printf("%d\n", g_m_regNumList[i]-1);
-      printf("%d\n", g_m_regElemlist[r][idx]);
       idx++;
    }
 
@@ -1915,21 +1943,19 @@ Domain initialiseALL(struct cmdLineOpts opts,int myRank,Int8_t numRanks){
    int m_numElem =  compute_local_size(g_numElem,(Int8_t)numRanks,myRank);
    int m_numNode =  compute_local_size(g_numNode,(Int8_t)numRanks,myRank);
    m_numReg = opts.numReg;
-
+   printf("HERE 0.0.1\n");
    allocateVars(m_numElem,m_numNode);
    if (opts.creation == Creation_Parallel){
       initialise( myRank,opts.nx, 1, opts.numReg,opts.balance, opts.cost, numRanks);
    }else if (opts.creation == Creation_Root){
       if (myRank == 0){
-         printf("HERE 0,0.1\n");
          allocateGlobalVars(g_numElem,g_numNode);
-         printf("HERE 0,0.2\n");
          initialiseSingular(0,0,0,opts.nx,1,opts.numReg,opts.balance, opts.cost,(Int8_t)numRanks);
       }
       distributeGlobalElems(myRank,numRanks,g_numElem,m_numElem,g_numNode,m_numNode);
    }
    MPI_Bcast(&m_deltatime,1,MPI_DOUBLE,0,MPI_COMM_WORLD);
-
    Domain domain= initOp2Vars(m_numElem,m_numNode);
+   printf("HERE 0.0.3\n");
    return domain;
 }

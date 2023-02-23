@@ -116,8 +116,8 @@ static void scatter_int_array(int *g_array, int *l_array, int comm_size,
 
   MPI_Scatterv(g_array, sendcnts, displs, MPI_INT, l_array, l_size * elem_size,
                MPI_INT, 0, MPI_COMM_WORLD);
-
   free(sendcnts);
+  sendcnts=NULL;
   free(displs);
 }
 
