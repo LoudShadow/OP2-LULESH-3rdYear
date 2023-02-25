@@ -308,7 +308,7 @@ void ParseCommandLineOptions(int argc, char *argv[],
          }
 
          /* -t initialiseation method <S,PK,PG,PKG,K> */
-         else if(strcmp(argv[i], "-tm") == 0) {
+         else if(strcmp(argv[i], "-t") == 0) {
             if (i+1 >= argc) {
                ParseError("Missing letter argumnet to -i\n", myRank);
             }

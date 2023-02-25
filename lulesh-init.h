@@ -496,13 +496,13 @@ int Convert_to_singular(int numReg,int** regions,int* regElemSize, int to_rank, 
    int start=0;
    for (int i = 0; i < to_rank; i++)
    {
-      start=compute_local_size(g_numElem,comm_size,i);
+      start+=compute_local_size(g_numElem,comm_size,i);
    }
-   int end=compute_local_size(g_numElem,comm_size,to_rank);
+   int end=start+compute_local_size(g_numElem,comm_size,to_rank);
 
    printf("HERE 1.2.3\n");
    int index=0;
-   int totalSize;
+   int totalSize=0;
    for(int r=0; r<numReg;r++){
       for(int e=0; e<regElemSize[r];e++){
          if (regions[r][e]>=start && regions[r][e]<end){
@@ -513,21 +513,23 @@ int Convert_to_singular(int numReg,int** regions,int* regElemSize, int to_rank, 
       }
    }
    localValues[0]=localValues_Local;
+   printf("SENDING %d size: %d to Rank: %d : %d %d\n",tag,numReg,to_rank,localRegionSize[0],localRegionSize[1]);
    MPI_Send(localRegionSize,numReg,MPI_INT,to_rank,tag,MPI_COMM_WORLD);
+   printf("SENT TOTAL_SIZE: %d\n",totalSize);
+   printf("localRegionSizes %d %d\n",localRegionSize[0],localRegionSize[1]);
    free(localRegionSize);
    localRegionSize=NULL;
    return totalSize;
 }
 
 static inline 
-int map_and_send(int* the_map, int* values,int length,int rank,int tag){
+void map_and_send(int* the_map, int* values,int length,int rank,int tag){
    int *mapped_values=(int*)malloc(sizeof(int)*length);
 
    for (int i = 0; i < length; i++)
    {
       mapped_values[i]=the_map[values[i]];
    }
-
    MPI_Send(mapped_values,length,MPI_INT,rank,tag,MPI_COMM_WORLD);
    free(mapped_values);
    mapped_values=NULL;
@@ -535,8 +537,29 @@ int map_and_send(int* the_map, int* values,int length,int rank,int tag){
 
 static inline
 void distrbute_Region_Information_seq(int myRank,int comm_size,int g_numElem){
+   MPI_Barrier(MPI_COMM_WORLD);
+
+   if (myRank==0){
+      for (int j = 0; j < m_numReg; j++)
+      {
+         printf("START============================\n");
+         for (int i = 0; i < g_m_regElemSize[j]; i++)
+         {
+            printf("%d\n",g_m_regElemlist[j][i]);
+         }
+         printf("END============================\n");
+
+      }
+   }
+   MPI_Barrier(MPI_COMM_WORLD);
+   printf("TOGETHER ALLL\n");
+   MPI_Barrier(MPI_COMM_WORLD);
+   
+   
+
+
+
    int total_local_size;
-   printf("Starting HERE 1.1 \n");
    if (myRank==0){
       int start=0;
       int end=compute_local_size(g_numElem,comm_size,0);
@@ -553,8 +576,6 @@ void distrbute_Region_Information_seq(int myRank,int comm_size,int g_numElem){
             }
          }
       }
-      printf("HERE 1.2.4\n");
-      printf("offset -1.0 %d\n",m_regElemSize[0]);
 
 
 
@@ -562,7 +583,7 @@ void distrbute_Region_Information_seq(int myRank,int comm_size,int g_numElem){
          int *tmp;
          int **localValues= &tmp;
          int size=Convert_to_singular(m_numReg,g_m_regElemlist,g_m_regElemSize,rank,comm_size,g_numElem,0,localValues);
-         MPI_Send(localValues,size,MPI_INT,rank,1,MPI_COMM_WORLD);
+         MPI_Send(*localValues,size,MPI_INT,rank,1,MPI_COMM_WORLD);
          map_and_send(g_lxim,*localValues,size,rank,2);
          map_and_send(g_lxip,*localValues,size,rank,3);
          map_and_send(g_letam,*localValues,size,rank,4);
@@ -572,7 +593,6 @@ void distrbute_Region_Information_seq(int myRank,int comm_size,int g_numElem){
          free(*localValues);
       }
    }else{
-      printf("Starting HERE 1.2 \n");
 
       MPI_Recv(m_regElemSize,m_numReg,MPI_INT,0,0,MPI_COMM_WORLD,NULL);
       local_total_region_size=0;
@@ -580,24 +600,28 @@ void distrbute_Region_Information_seq(int myRank,int comm_size,int g_numElem){
       {
          local_total_region_size+=m_regElemSize[i];
       }
-      m_regElemlist_2 = (int*)malloc(m_numReg * local_total_region_size);
+      m_regElemlist_2 = (int*)malloc(sizeof(int) * local_total_region_size);
    }
-   printf("HERE 1.4.4\n");
+   
    m_region_i_to_lxim=(int*)malloc(sizeof(int)*local_total_region_size);
    m_region_i_to_lxip=(int*)malloc(sizeof(int)*local_total_region_size);
    m_region_i_to_letam=(int*)malloc(sizeof(int)*local_total_region_size);
    m_region_i_to_letap=(int*)malloc(sizeof(int)*local_total_region_size);
    m_region_i_to_lzetam=(int*)malloc(sizeof(int)*local_total_region_size);
    m_region_i_to_lzetap=(int*)malloc(sizeof(int)*local_total_region_size);
-   printf("HERE 1.4.5\n");
    if (myRank!=0){
-      MPI_Recv(m_regElemlist_2,local_total_region_size,MPI_INT,0,0,MPI_COMM_WORLD,NULL);
-      MPI_Recv(m_region_i_to_lxim,local_total_region_size,MPI_INT,0,1,MPI_COMM_WORLD,NULL);
-      MPI_Recv(m_region_i_to_lxip,local_total_region_size,MPI_INT,0,2,MPI_COMM_WORLD,NULL);
-      MPI_Recv(m_region_i_to_letam,local_total_region_size,MPI_INT,0,3,MPI_COMM_WORLD,NULL);
-      MPI_Recv(m_region_i_to_letap,local_total_region_size,MPI_INT,0,4,MPI_COMM_WORLD,NULL);
-      MPI_Recv(m_region_i_to_lzetam,local_total_region_size,MPI_INT,0,5,MPI_COMM_WORLD,NULL);
-      MPI_Recv(m_region_i_to_lzetap,local_total_region_size,MPI_INT,0,6,MPI_COMM_WORLD,NULL);
+      MPI_Recv(m_regElemlist_2,local_total_region_size,MPI_INT,0,1,MPI_COMM_WORLD,NULL);
+      for (int i = 0; i < local_total_region_size; i++)
+      {
+         printf("OUT:%d %d\n",myRank,i,m_regElemlist_2[i]);
+      }
+      
+      MPI_Recv(m_region_i_to_lxim,local_total_region_size,MPI_INT,0,2,MPI_COMM_WORLD,NULL);
+      MPI_Recv(m_region_i_to_lxip,local_total_region_size,MPI_INT,0,3,MPI_COMM_WORLD,NULL);
+      MPI_Recv(m_region_i_to_letam,local_total_region_size,MPI_INT,0,4,MPI_COMM_WORLD,NULL);
+      MPI_Recv(m_region_i_to_letap,local_total_region_size,MPI_INT,0,5,MPI_COMM_WORLD,NULL);
+      MPI_Recv(m_region_i_to_lzetam,local_total_region_size,MPI_INT,0,6,MPI_COMM_WORLD,NULL);
+      MPI_Recv(m_region_i_to_lzetap,local_total_region_size,MPI_INT,0,7,MPI_COMM_WORLD,NULL);
    }else{
       printf("HERE 1.4.6\n");
       for (int i = 0; i < local_total_region_size; i++){m_region_i_to_lxim[i]=g_lxim[m_regElemlist_2[i]];}
@@ -608,6 +632,9 @@ void distrbute_Region_Information_seq(int myRank,int comm_size,int g_numElem){
       for (int i = 0; i < local_total_region_size; i++){m_region_i_to_lzetap[i]=g_lzetap[m_regElemlist_2[i]];}
 
    }
+   printf("%d REACHED BARRIER %p\n",myRank,MPI_COMM_WORLD);
+   MPI_Barrier(MPI_COMM_WORLD);
+   printf("%d PASSED BARRIER\n",myRank);
 
 }
 
@@ -718,7 +745,7 @@ void distributeGlobalElems(int myRank,int comm_size, int g_numElem , int numElem
 // Init OP2 Vars
 // ===================================================
 static inline
-Domain initOp2Vars(int m_numElem,int m_numNode){
+Domain initOp2Vars(int myRank,int m_numElem,int m_numNode){
    struct Domain domain;
    domain.nodes = op_decl_set(m_numNode, "nodes");
    domain.elems = op_decl_set(m_numElem, "elems");
@@ -749,20 +776,17 @@ Domain initOp2Vars(int m_numElem,int m_numNode){
    char mapName[20];
    int offset=0;
    printf("STARTING maping\n");
+   printf("Sizes at on rank: %d with sizes:",myRank);
    for (int i = 0; i < m_numReg; i++){
-      if (m_regElemSize[i]==0){
-         printf("CONTINUING\n");
-         continue;
-      }
-      printf("offset 1.0 %d\n",m_regElemSize[i]);
+      printf(" %d ",m_regElemSize[i]);
+      // if (m_regElemSize[i]==0){
+      //    continue;
+      // }
 
       sprintf(regionName,"region_%d",i);
       domain.region_i[i] = op_decl_set(m_regElemSize[i], regionName);
 
-      printf("offset 1.0\n");
       sprintf(mapName,"region_%d_to_elems",i);
-      printf("offset 1.2 %d\n",m_regElemlist_2[0]);
-
       domain.region_i_to_elems[i] = op_decl_map(domain.region_i[i],domain.elems,1,&(m_regElemlist_2[offset]),mapName);
 
       sprintf(mapName,"region_%d_to_lxim",i);
@@ -780,6 +804,7 @@ Domain initOp2Vars(int m_numElem,int m_numNode){
 
       offset+=m_regElemSize[i];
    }
+   printf("\n");
    printf("ENDING maping\n");
 
    printf("INIT Done\n");
@@ -1141,12 +1166,110 @@ void initialise(int myRank,
    //! End Build Mesh Function
 
    //! Start Create Region Sets
-   //regions are just not used
    srand(0);
-   // int myRank = 0;
 
    m_numReg = nr;
+   m_regElemSize = (int*) malloc(m_numReg * sizeof(int));
+   m_regElemlist_2 = (int*) malloc(m_numElem * sizeof(int));
+   m_regNumList = (int*) malloc(m_numElem * sizeof(int));
 
+   int nextIndex = 0;
+   //if we only have one region just fill it
+   // Fill out the regNumList with material numbers, which are always
+   // the region index plus one 
+   if(m_numReg == 1){
+      while(nextIndex < m_numElem){
+         m_regNumList[nextIndex] = 1;
+         nextIndex++;
+      }
+      m_regElemSize[0] = 0;
+   } else {//If we have more than one region distribute the elements.
+      int regionNum;
+      int regionVar;
+      int lastReg = -1;
+      int binSize;
+      int elements;
+      int runto = 0;
+      int costDenominator = 0;
+      int* regBinEnd = (int*) malloc(m_numReg * sizeof(int));
+
+      //Determine the relative weights of all the regions.  This is based off the -b flag.  Balance is the value passed into b.  
+      for(int i=0; i<m_numReg;++i){
+         m_regElemSize[i] = 0;
+         costDenominator += pow((i+1), balance);//Total sum of all regions weights
+         regBinEnd[i] = costDenominator;  //Chance of hitting a given region is (regBinEnd[i] - regBinEdn[i-1])/costDenominator
+      }
+      //Until all elements are assigned
+      while (nextIndex < m_numElem) {
+         //pick the region
+         regionVar = rand() % costDenominator;
+         int i = 0;
+         while(regionVar >= regBinEnd[i]) i++;
+         //rotate the regions based on MPI rank.  Rotation is Rank % m_numRegions this makes each domain have a different region with 
+         //the highest representation
+         regionNum = ((i+myRank)% m_numReg) +1;
+         while(regionNum == lastReg){
+            regionVar = rand() % costDenominator;
+            i = 0;
+            while(regionVar >= regBinEnd[i]) i++;
+            regionNum = ((i + myRank) % m_numReg) + 1;
+         }
+         //Pick the bin size of the region and determine the number of elements.
+         binSize = rand() % 1000;
+         if(binSize < 773) {
+	         elements = rand() % 15 + 1;
+	      }
+	      else if(binSize < 937) {
+	         elements = rand() % 16 + 16;
+	      }
+	      else if(binSize < 970) {
+	         elements = rand() % 32 + 32;
+	      }
+	      else if(binSize < 974) {
+	         elements = rand() % 64 + 64;
+	      } 
+	      else if(binSize < 978) {
+	         elements = rand() % 128 + 128;
+	      }
+	      else if(binSize < 981) {
+	         elements = rand() % 256 + 256;
+	      }
+	      else
+	         elements = rand() % 1537 + 512;
+         runto = elements + nextIndex;
+	      //Store the elements.  If we hit the end before we run out of elements then just stop.
+         while (nextIndex < runto && nextIndex < m_numElem) {
+	         m_regNumList[nextIndex] = regionNum;
+	         nextIndex++;
+	      }
+         lastReg = regionNum;
+      }
+      free(regBinEnd); 
+   }
+   // Convert m_regNumList to region index sets
+   // First, count size of each region 
+
+   //re-writen for consecuative array reation
+   int totalSize=0;
+   for (int i=0 ; i<m_numElem ; ++i) {
+      int r = m_regNumList[i]-1; // region index == regnum-1
+      m_regElemSize[r]++;
+   }
+   
+   int* reg_offset = (int*)malloc(m_numReg * sizeof(int));
+   reg_offset[0]=0;
+   for (int r=0; r<m_numReg-1; r++ ){
+      reg_offset[r+1]=reg_offset[r]+m_regElemSize[r];
+      m_regElemSize[r]=0;
+   }
+   m_regElemSize[m_numReg-1]=0;
+   
+   // Third, fill index sets
+   for (int i=0 ; i<m_numElem ; ++i) {
+      int r = m_regNumList[i]-1;       // region index == regnum-1
+      int regndx = m_regElemSize[r]++; // Note increment
+      m_regElemlist_2[reg_offset[r]+regndx] = i+starting_m_numElem;
+   }
 
    //! End Create Region Sets
 
@@ -1330,6 +1453,21 @@ void initialise(int myRank,
             }
          }
       }
+   }
+
+   m_region_i_to_lxim=(int*)malloc(sizeof(int)*m_numElem);
+   m_region_i_to_lxip=(int*)malloc(sizeof(int)*m_numElem);
+   m_region_i_to_letam=(int*)malloc(sizeof(int)*m_numElem);
+   m_region_i_to_letap=(int*)malloc(sizeof(int)*m_numElem);
+   m_region_i_to_lzetam=(int*)malloc(sizeof(int)*m_numElem);
+   m_region_i_to_lzetap=(int*)malloc(sizeof(int)*m_numElem);
+   for (int i=0; i<m_numElem;i++){
+      m_region_i_to_lxim[i]=lxim[m_regElemlist_2[i]-starting_m_numElem];
+      m_region_i_to_lxip[i]=lxip[m_regElemlist_2[i]-starting_m_numElem];
+      m_region_i_to_letam[i]=letam[m_regElemlist_2[i]-starting_m_numElem];
+      m_region_i_to_letap[i]=letap[m_regElemlist_2[i]-starting_m_numElem];
+      m_region_i_to_lzetam[i]=lzetam[m_regElemlist_2[i]-starting_m_numElem];
+      m_region_i_to_lzetap[i]=lzetap[m_regElemlist_2[i]-starting_m_numElem];
    }
 
 
@@ -1650,12 +1788,7 @@ void initialiseSingular(int colLoc,
       int r = g_m_regNumList[i]-1; // region index == regnum-1
       g_m_regElemSize[r]++;
    }
-   printf("=======================================\n");
-   for (int i = 0; i < m_numReg; i++)
-   {
-      printf("size of %d : %d , %p\n",i,g_m_regElemSize[i],g_m_regElemlist[i]);
-   }
-   printf("=======================================\n");
+
    // Second, allocate each region index set
    for (int i=0 ; i<m_numReg ; ++i) {
       g_m_regElemlist[i] = (int*) malloc(g_m_regElemSize[i]*sizeof(int));
@@ -1666,30 +1799,11 @@ void initialiseSingular(int colLoc,
    for (int i=0 ; i<g_numElem ; ++i) {
       int r = g_m_regNumList[i]-1;       // region index == regnum-1
       int regndx = g_m_regElemSize[r]++; // Note increment
-      printf("size of %d %d %d: %d , %p %p\n",i,r,regndx,g_m_regElemSize[r],g_m_regElemlist[r],g_m_regElemlist);
       g_m_regElemlist[r][regndx] = i;
-      printf("       check 6 %d %d : %d , %p %p\n",6,6,g_m_regElemSize[6],g_m_regElemlist[6],g_m_regElemlist);
+   }
+   printf("HERE NOW 3.4.4.1 %d\n",g_numElem);
 
 
-   }
-   printf("=======================================\n");
-   for (int i = 0; i < m_numReg; i++)
-   {
-      printf("size of %d : %d , %p\n",i,g_m_regElemSize[i],g_m_regElemlist[i]);
-   }
-   printf("=======================================\n");
-   printf("HERE NOW 3.4.4.1\n");
-
-   int r=0;
-   int idx=0;
-   for (int i=0 ; i<g_numElem ; ++i) {
-      if (idx >= g_m_regElemSize[r]){
-         idx=0;
-         r++;
-      }
-      // printf("%d\n", g_m_regNumList[i]-1);
-      idx++;
-   }
 
 
 
@@ -1955,7 +2069,7 @@ Domain initialiseALL(struct cmdLineOpts opts,int myRank,Int8_t numRanks){
       distributeGlobalElems(myRank,numRanks,g_numElem,m_numElem,g_numNode,m_numNode);
    }
    MPI_Bcast(&m_deltatime,1,MPI_DOUBLE,0,MPI_COMM_WORLD);
-   Domain domain= initOp2Vars(m_numElem,m_numNode);
+   Domain domain= initOp2Vars(myRank,m_numElem,m_numNode);
    printf("HERE 0.0.3\n");
    return domain;
 }

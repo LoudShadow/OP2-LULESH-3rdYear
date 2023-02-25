@@ -1227,9 +1227,6 @@ void CalcMonotonicQForElems()
    // Code is left here for future reference
    // for (int r=0 ; r<domain.numReg() ; ++r) {
    for (int r=0 ; r<m_numReg ; ++r) {
-      if (m_regElemSize[r]==0){
-         continue;
-      }
       // if (domain.regElemSize(r) > 0) {
       // if (m_regElemSize[r] > 0) {
       if(m_numElem > 0){
@@ -1423,6 +1420,7 @@ void EvalEOSForElems(int region, int rep)
    op_map current_map = domain.region_i_to_elems[region];
 
    //loop to add load imbalance based on region number 
+
    for(int j = 0; j < rep; j++) {
       /* compress data, minimal set */
 
@@ -1433,6 +1431,7 @@ void EvalEOSForElems(int region, int rep)
                      op_arg_dat(domain.p_q_old, 0, current_map, 1, "double", OP_WRITE), op_arg_dat(domain.p_q, 0, current_map, 1, "double", OP_READ),
                      op_arg_dat(domain.p_qq_old, 0, current_map, 1, "double", OP_WRITE), op_arg_dat(domain.p_qq, 0, current_map, 1, "double", OP_READ),
                      op_arg_dat(domain.p_ql_old, 0, current_map, 1, "double", OP_WRITE), op_arg_dat(domain.p_ql, 0, current_map, 1, "double", OP_READ));
+
 
          op_par_loop(CalcHalfSteps, "CalcHalfSteps", current_set,
                      op_arg_dat(domain.p_compression, 0, current_map, 1, "double", OP_WRITE),
@@ -1519,9 +1518,6 @@ void ApplyMaterialPropertiesForElems()
     
 
     for (int r=0 ; r<m_numReg ; r++) {
-      if (m_regElemSize[r]==0){
-         continue;
-      }
        int rep;
        //Determine load imbalance for this region
        //round down the number with lowest cost
@@ -1535,7 +1531,7 @@ void ApplyMaterialPropertiesForElems()
       else
          rep = 10 * (1+ m_cost);
       //    MPI_Barrier(MPI_COMM_WORLD);
-      //    op_print("Eval EOS");
+         // op_print("Eval EOS");
        EvalEOSForElems( r , rep);
    }
 
@@ -1576,7 +1572,7 @@ void LagrangeElements()
   ApplyMaterialPropertiesForElems() ;
 
 // MPI_Barrier(MPI_COMM_WORLD);
-//    op_print("Update Vols for Elems");
+   // op_print("Update Vols for Elems");
   UpdateVolumesForElems() ;
 }
 
@@ -1622,9 +1618,6 @@ void CalcTimeConstraintsForElems() {
    m_dthydro = 1.0e+20;
 
    for (int r=0 ; r < m_numReg ; ++r) { 
-      if (m_regElemSize[r]==0){
-         continue;
-      }
       /* evaluate time constraint */
       CalcCourantConstraintForElems(r) ;
 
@@ -1646,7 +1639,6 @@ void LagrangeLeapFrog()
    LagrangeNodal();
 
    // op_dump_dat()
-
    /* calculate element quantities (i.e. velocity gradient & q), and update
     * material states */
    // MPI_Barrier(MPI_COMM_WORLD);
@@ -1963,6 +1955,7 @@ int main(int argc, char *argv[])
    if (myRank==0){printf("\n\n");}
    op_diagnostic_output();
 
+   op_dump_to_hdf5("/home/joseph/3rdYear/TestOut");
    switch (opts.partition)
    {
       case Partition_S:
@@ -2042,9 +2035,6 @@ int main(int argc, char *argv[])
                    << "dt="     << double(m_deltatime) << "\n";
          std::cout.unsetf(std::ios_base::floatfield);
       }
-
-      
-
    }
 
    op_timers(&cpu_t2, &wall_t2);
@@ -2088,7 +2078,7 @@ int main(int argc, char *argv[])
 
    printf("finishing\n");
 
-   op_dump_to_hdf5("/home/joseph/3rdYear/TestOut");
+   // op_dump_to_hdf5("/home/joseph/3rdYear/TestOut");
 
    op_exit(); 
 
