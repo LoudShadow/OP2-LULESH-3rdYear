@@ -300,6 +300,34 @@ struct Domain{
 
 };
 op_dat p_loc;
+
+
+void writeFileADHFJ(int myRank,int m_numNodes,double *x,double *y, double *z, char *file ){
+   int fileLength = strlen(file);
+   int numLength=1;
+
+   if (myRank<=0){
+      numLength=1;
+   }else{
+      numLength=(int)(ceil(  log10(myRank+1)  ));
+   }
+
+   char *newName = (char*)malloc( (numLength+fileLength+2)*sizeof(char) );
+   strcpy(newName, file);
+   sprintf(&newName[fileLength],"%d",myRank);
+   newName[fileLength+numLength] ='\0';
+
+   printf(newName);
+   FILE* ptr = fopen(newName,"w");
+   for (int i = 0; i < m_numNodes; i++)
+   {
+      /* code */
+      fprintf(ptr,"%d, %.6f, %.6f, %.6f\n",myRank,x[i],y[i],z[i]);
+   }
+   fclose(ptr);
+   free(newName);
+}
+
 // ===================================================
 // Allocate all standard Nodes
 // ===================================================

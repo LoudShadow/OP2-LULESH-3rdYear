@@ -167,6 +167,8 @@ Additional BSD Notice
 #include "lulesh-viz.h"
 // #include "lulesh-visit.cc"
 
+#define USE_DIRTY_BIT_OPT 0
+
 // #include "const.h"
 int myRank;
 struct cmdLineOpts opts;
@@ -1191,6 +1193,7 @@ static inline
 void CalcMonotonicQRegionForElems(int r)
 {
    op_set region_elems=domain.region_i[r];
+
    op_map map_core=domain.region_i_to_elems[r];
 
    op_map map_lxim=domain.region_i_to_lxim[r];
@@ -1223,8 +1226,8 @@ void CalcMonotonicQForElems()
    //
    // calculate the monotonic q for all regions
    //
-   // The OP2 version does not support multiple regions yet
-   // Code is left here for future reference
+   // // The OP2 version does not support multiple regions yet
+   // // Code is left here for future reference
    // for (int r=0 ; r<domain.numReg() ; ++r) {
    for (int r=0 ; r<m_numReg ; ++r) {
       // if (domain.regElemSize(r) > 0) {
@@ -1272,6 +1275,9 @@ void CalcPressureForElemsHalfstep(int region)
                op_arg_dat(domain.p_bvc, 0, current_map, 1, "double", OP_WRITE),
                op_arg_dat(domain.p_compHalfStep, 0, current_map, 1, "double", OP_READ),
                op_arg_dat(domain.p_pbvc, 0, current_map, 1, "double", OP_WRITE));
+   domain.p_bvc->dirtybit=0;
+   domain.p_pbvc->dirtybit=0;
+
 
    //NOTE changed p_pHalfStep to write review
    op_par_loop(CalcPHalfstep, "CalcPHalfstep", current_set,
@@ -1280,6 +1286,7 @@ void CalcPressureForElemsHalfstep(int region)
                op_arg_dat(domain.p_e_new, 0, current_map, 1, "double", OP_READ),
                op_arg_dat(domain.p_vnewc, 0, current_map, 1, "double", OP_READ)
                );
+   domain.p_pHalfStep->dirtybit=0;
 }
 
 static inline
@@ -1291,14 +1298,19 @@ void CalcPressureForElems(int region)
                op_arg_dat(domain.p_bvc, 0, current_map, 1, "double", OP_WRITE),
                op_arg_dat(domain.p_compression, 0, current_map, 1, "double", OP_READ),
                op_arg_dat(domain.p_pbvc, 0, current_map, 1, "double", OP_WRITE));
-
-
+   #if USE_DIRTY_BIT_OPT 
+   domain.p_bvc->dirtybit=0;
+   domain.p_pbvc->dirtybit=0;
+   #endif
    op_par_loop(CalcPNew, "CalcPNew", current_set,0
                op_arg_dat(domain.p_p_new, 0, current_map, 1, "double", OP_WRITE),
                op_arg_dat(domain.p_bvc, 0, current_map, 1, "double", OP_READ),
                op_arg_dat(domain.p_e_new, 0, current_map, 1, "double", OP_READ),
                op_arg_dat(domain.p_vnewc, 0, current_map, 1, "double", OP_READ)
                );
+   #if USE_DIRTY_BIT_OPT 
+   domain.p_p_new->dirtybit=0;
+   #endif
 }
 
 /******************************************/
@@ -1318,7 +1330,9 @@ void CalcEnergyForElems(int region)
                op_arg_dat(domain.p_q_old, 0, current_map, 1, "double", OP_READ),
                op_arg_dat(domain.p_work, 0, current_map, 1, "double", OP_READ)
    );
-
+   #if USE_DIRTY_BIT_OPT 
+   domain.p_e_new->dirtybit=0;
+   #endif
    CalcPressureForElemsHalfstep(region);
 
    //NOTE domain.p_e_new may be an INC
@@ -1335,13 +1349,19 @@ void CalcEnergyForElems(int region)
                op_arg_dat(domain.p_p_old, 0, current_map, 1, "double", OP_READ),
                op_arg_dat(domain.p_q_old, 0, current_map, 1, "double", OP_READ)
    );
+   #if USE_DIRTY_BIT_OPT 
+   domain.p_q_new->dirtybit=0;
+   domain.p_e_new->dirtybit=0;
+   #endif
 
    //NOTE domain.p_e_new may be an INC
    op_par_loop(CalcNewEStep3, "CalcNewEStep3", current_set,
                op_arg_dat(domain.p_e_new, 0, current_map, 1, "double", OP_RW),
                op_arg_dat(domain.p_work, 0, current_map, 1, "double", OP_READ)
    );
-
+   #if USE_DIRTY_BIT_OPT 
+   domain.p_e_new->dirtybit=0;
+   #endif
    CalcPressureForElems(region);
 
    //NOTE domain.p_e_new may be an INC
@@ -1359,7 +1379,9 @@ void CalcEnergyForElems(int region)
                op_arg_dat(domain.p_q_new, 0, current_map, 1, "double", OP_READ),
                op_arg_dat(domain.p_pHalfStep, 0, current_map, 1, "double", OP_READ)
    );
-
+   #if USE_DIRTY_BIT_OPT 
+   domain.p_e_new->dirtybit=0;
+   #endif
    CalcPressureForElems(region);
    //NOTE p_q_new could probably be a write
    op_par_loop(CalcQNew, "CalcQNew", current_set,
@@ -1373,7 +1395,9 @@ void CalcEnergyForElems(int region)
                op_arg_dat(domain.p_ql_old, 0, current_map, 1, "double", OP_READ),
                op_arg_dat(domain.p_qq_old, 0, current_map, 1, "double", OP_READ)
                );
-   
+   #if USE_DIRTY_BIT_OPT
+   domain.p_q_new->dirtybit=0;
+   #endif
 
    return ;
 }
@@ -1393,6 +1417,7 @@ void CalcSoundSpeedForElems(int region)
                op_arg_dat(domain.p_p_new, 0, current_map, 1, "double", OP_READ),
                op_arg_dat(domain.p_ss, 0, current_map, 1, "double", OP_WRITE)
                );
+   domain.p_ss->dirtybit=0;
 }
 
 /******************************************/
@@ -1420,17 +1445,24 @@ void EvalEOSForElems(int region, int rep)
    op_map current_map = domain.region_i_to_elems[region];
 
    //loop to add load imbalance based on region number 
-
+   op_par_loop(CopyEOSValsIntoArray, "CopyEOSValsIntoArray", current_set,
+               op_arg_dat(domain.p_e_old, 0, current_map, 1, "double", OP_WRITE), op_arg_dat(domain.p_e, 0, current_map, 1, "double", OP_READ),
+               op_arg_dat(domain.p_delvc, 0, current_map, 1, "double", OP_WRITE), op_arg_dat(domain.p_delv, 0, current_map, 1, "double", OP_READ),
+               op_arg_dat(domain.p_p_old, 0, current_map, 1, "double", OP_WRITE), op_arg_dat(domain.p_p, 0, current_map, 1, "double", OP_READ),
+               op_arg_dat(domain.p_q_old, 0, current_map, 1, "double", OP_WRITE), op_arg_dat(domain.p_q, 0, current_map, 1, "double", OP_READ),
+               op_arg_dat(domain.p_qq_old, 0, current_map, 1, "double", OP_WRITE), op_arg_dat(domain.p_qq, 0, current_map, 1, "double", OP_READ),
+               op_arg_dat(domain.p_ql_old, 0, current_map, 1, "double", OP_WRITE), op_arg_dat(domain.p_ql, 0, current_map, 1, "double", OP_READ));
+   #if USE_DIRTY_BIT_OPT 
+   domain.p_e_old->dirtybit=0;
+   domain.p_delvc->dirtybit=0;
+   domain.p_p_old->dirtybit=0;
+   domain.p_q_old->dirtybit=0;
+   domain.p_qq_old->dirtybit=0;
+   domain.p_ql_old->dirtybit=0;
+   #endif
    for(int j = 0; j < rep; j++) {
       /* compress data, minimal set */
 
-         op_par_loop(CopyEOSValsIntoArray, "CopyEOSValsIntoArray", current_set,
-                     op_arg_dat(domain.p_e_old, 0, current_map, 1, "double", OP_WRITE), op_arg_dat(domain.p_e, 0, current_map, 1, "double", OP_READ),
-                     op_arg_dat(domain.p_delvc, 0, current_map, 1, "double", OP_WRITE), op_arg_dat(domain.p_delv, 0, current_map, 1, "double", OP_READ),
-                     op_arg_dat(domain.p_p_old, 0, current_map, 1, "double", OP_WRITE), op_arg_dat(domain.p_p, 0, current_map, 1, "double", OP_READ),
-                     op_arg_dat(domain.p_q_old, 0, current_map, 1, "double", OP_WRITE), op_arg_dat(domain.p_q, 0, current_map, 1, "double", OP_READ),
-                     op_arg_dat(domain.p_qq_old, 0, current_map, 1, "double", OP_WRITE), op_arg_dat(domain.p_qq, 0, current_map, 1, "double", OP_READ),
-                     op_arg_dat(domain.p_ql_old, 0, current_map, 1, "double", OP_WRITE), op_arg_dat(domain.p_ql, 0, current_map, 1, "double", OP_READ));
 
 
          op_par_loop(CalcHalfSteps, "CalcHalfSteps", current_set,
@@ -1439,7 +1471,10 @@ void EvalEOSForElems(int region, int rep)
                      op_arg_dat(domain.p_delvc, 0, current_map, 1, "double", OP_READ),
                      op_arg_dat(domain.p_compHalfStep, 0, current_map, 1, "double", OP_WRITE)
          );
-
+#if USE_DIRTY_BIT_OPT 
+         domain.p_compression->dirtybit=0;
+         domain.p_ql_old->dirtybit=0;
+#endif
 
       /* Check for v > eosvmax or v < eosvmin */
          if ( eosvmin != double(0.) ) {
@@ -1448,8 +1483,10 @@ void EvalEOSForElems(int region, int rep)
                         op_arg_dat(domain.p_compHalfStep, 0, current_map, 1, "double", OP_WRITE),
                         op_arg_dat(domain.p_compression, 0, current_map, 1, "double", OP_READ)
             );
-
          }
+         #if USE_DIRTY_BIT_OPT 
+         domain.p_compHalfStep->dirtybit=0;
+         #endif
          if ( eosvmax != double(0.) ) {
             op_par_loop(CheckEOSUpperBound, "CheckEOSUpperBound", current_set,
                         op_arg_dat(domain.p_vnewc, 0, current_map, 1, "double", OP_READ),
@@ -1457,10 +1494,17 @@ void EvalEOSForElems(int region, int rep)
                         op_arg_dat(domain.p_compression, 0, current_map, 1, "double", OP_WRITE),
                         op_arg_dat(domain.p_p_old, 0, current_map, 1, "double", OP_WRITE)
             );
-
          }
+         #if USE_DIRTY_BIT_OPT 
+         domain.p_compression->dirtybit=0;
+         domain.p_ql_old->dirtybit=0;
+         domain.p_compHalfStep->dirtybit=0;
+         #endif
          op_par_loop(CalcEOSWork, "CalcEOSWork", current_set,
                      op_arg_dat(domain.p_work, 0, current_map, 1 , "double", OP_WRITE));
+         #if USE_DIRTY_BIT_OPT
+         domain.p_work->dirtybit=0;
+         #endif
 
       CalcEnergyForElems(region);
    }
@@ -1470,6 +1514,11 @@ void EvalEOSForElems(int region, int rep)
                op_arg_dat(domain.p_e, 0, current_map, 1, "double", OP_WRITE), op_arg_dat(domain.p_e_new, 0, current_map, 1, "double", OP_READ),
                op_arg_dat(domain.p_q, 0, current_map, 1, "double", OP_WRITE), op_arg_dat(domain.p_q_new, 0, current_map, 1, "double", OP_READ)
    );
+   #if USE_DIRTY_BIT_OPT 
+   domain.p_p->dirtybit=0;
+   domain.p_e->dirtybit=0;
+   domain.p_q->dirtybit=0;
+   #endif
 
    CalcSoundSpeedForElems(region) ;
 
@@ -1517,7 +1566,7 @@ void ApplyMaterialPropertiesForElems()
 
     
 
-    for (int r=0 ; r<m_numReg ; r++) {
+   for (int r=0 ; r<m_numReg ; r++) {
        int rep;
        //Determine load imbalance for this region
        //round down the number with lowest cost
@@ -1534,6 +1583,24 @@ void ApplyMaterialPropertiesForElems()
          // op_print("Eval EOS");
        EvalEOSForElems( r , rep);
    }
+   #if USE_DIRTY_BIT_OPT
+   domain.p_e_old->dirtybit=1; //only here
+   domain.p_delvc->dirtybit=1; //only here
+   domain.p_p_old->dirtybit=1; //only here
+   domain.p_q_old->dirtybit=1; //only here
+   domain.p_qq_old->dirtybit=1; //only here
+   domain.p_ql_old->dirtybit=1; //only here
+   domain.p_compHalfStep->dirtybit=1; //only here
+   domain.p_work->dirtybit=1; //only here
+   domain.p_p->dirtybit=1; //global can be copied out
+   domain.p_e->dirtybit=1; //global can be copied out
+   domain.p_q->dirtybit=1; //global can be copied out
+   domain.p_e_new->dirtybit=1;      //only here
+   domain.p_q_new->dirtybit=1;      //only here
+   domain.p_p_new->dirtybit=1;      //only here
+   domain.p_bvc->dirtybit=1;        //only here
+   domain.p_pbvc->dirtybit=1;       //only here
+   #endif
 
    //  Release(&vnewc) ;
   }
@@ -1761,36 +1828,7 @@ void InitMeshDecomp(int numRanks, int myRank,
    return;
 }
 
-
-void writeFileADHFJ(int myRank,int m_numNodes,double *x,double *y, double *z, char *file ){
-   int fileLength = strlen(file);
-   int numLength=1;
-
-   if (myRank<=0){
-      numLength=1;
-   }else{
-      numLength=(int)(ceil(  log10(myRank+1)  ));
-   }
-
-   char *newName = (char*)malloc( (numLength+fileLength+2)*sizeof(char) );
-   strcpy(newName, file);
-   sprintf(&newName[fileLength],"%d",myRank);
-   newName[fileLength+numLength] ='\0';
-
-   printf(newName);
-   FILE* ptr = fopen(newName,"w");
-   for (int i = 0; i < m_numNodes; i++)
-   {
-      /* code */
-      fprintf(ptr,"%d, %.6f, %.6f, %.6f\n",myRank,x[i],y[i],z[i]);
-   }
-   fclose(ptr);
-   free(newName);
-}
-
 //Neded to render regiosn in file
-
-
 
 /******************************************/
 
@@ -1946,6 +1984,12 @@ int main(int argc, char *argv[])
 
    domain = initialiseALL(opts,myRank,(Int8_t)numRanks);
 
+   writeFileADHFJ(myRank,
+   domain.p_x->set->size+domain.p_x->set->exec_size+domain.p_x->set->nonexec_size,
+   (double *)domain.p_x->data,
+   (double *)domain.p_y->data,
+   (double *)domain.p_z->data,"/home/joseph/3rdYear/testingFolder/partitioning/Before/Node");
+
    double * speed=(double *)malloc(m_numNode*sizeof(double));
    op_dat p_speed=op_decl_dat(domain.nodes, 1, "double", speed, "p_speed");
 
@@ -1997,12 +2041,13 @@ int main(int argc, char *argv[])
 
 
    // SHOW THE CUBE AS DIVIDED
-   // writeFileADHFJ(myRank,
-   //    p_x->set->size+p_x->set->exec_size+p_x->set->nonexec_size,
-   //    (double *)p_x->data,
-   //    (double *)p_y->data,
-   //    (double *)p_z->data,"/home/joseph/3rdYear/testingFolder/partitioning/After/Node");
+   writeFileADHFJ(myRank,
+   domain.p_x->set->size+domain.p_x->set->exec_size+domain.p_x->set->nonexec_size,
+   (double *)domain.p_x->data,
+   (double *)domain.p_y->data,
+   (double *)domain.p_z->data,"/home/joseph/3rdYear/testingFolder/partitioning/After/Node");
 
+   printf("DONE\n");
    // writeFileADHFJ(myRank,p_x->set->nonexec_size+p_x->set->exec_size,(double *)p_x->data,(double *)p_y->data,(double *)p_z->data,"/home/joseph/3rdYear/testingFolder/partitioning/All/Node");
    // double *outputX = (double*) malloc(m_numNode*sizeof(double));
    // double *outputY = (double*) malloc(m_numNode*sizeof(double));
