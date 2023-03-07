@@ -167,7 +167,7 @@ Additional BSD Notice
 #include "lulesh-viz.h"
 // #include "lulesh-visit.cc"
 
-#define USE_DIRTY_BIT_OPT 0
+#define USE_DIRTY_BIT_OPT 1
 
 // #include "const.h"
 int myRank;
@@ -1284,9 +1284,6 @@ void CalcPressureForElemsHalfstep(int region)
                op_arg_dat(local_region_i_p_bvc, -1, OP_ID, 1, "double", OP_WRITE),
                op_arg_dat(local_region_i_p_compHalfStep, -1, OP_ID, 1, "double", OP_READ),
                op_arg_dat(local_region_i_p_pbvc, -1, OP_ID, 1, "double", OP_WRITE));
-   domain.p_bvc->dirtybit=0;
-   domain.p_pbvc->dirtybit=0;
-
 
    //NOTE changed p_pHalfStep to write review
    op_par_loop(CalcPHalfstep, "CalcPHalfstep", current_set,
@@ -1295,7 +1292,7 @@ void CalcPressureForElemsHalfstep(int region)
                op_arg_dat(local_region_i_p_e_new, -1, OP_ID, 1, "double", OP_READ),
                op_arg_dat(domain.p_vnewc, 0, current_map, 1, "double", OP_READ)
                );
-   domain.p_pHalfStep->dirtybit=0;
+
 }
 
 static inline
@@ -1314,19 +1311,13 @@ void CalcPressureForElems(int region)
                op_arg_dat(local_region_i_p_bvc, -1, OP_ID, 1, "double", OP_WRITE),
                op_arg_dat(local_region_i_p_compression, -1, OP_ID, 1, "double", OP_READ),
                op_arg_dat(local_region_i_p_pbvc, -1, OP_ID, 1, "double", OP_WRITE));
-   #if USE_DIRTY_BIT_OPT 
-   domain.p_bvc->dirtybit=0;
-   domain.p_pbvc->dirtybit=0;
-   #endif
+
    op_par_loop(CalcPNew, "CalcPNew", current_set,
                op_arg_dat(local_region_i_p_p_new, -1, OP_ID, 1, "double", OP_WRITE),
                op_arg_dat(local_region_i_p_bvc, -1, OP_ID, 1, "double", OP_READ),
                op_arg_dat(local_region_i_p_e_new, -1, OP_ID, 1, "double", OP_READ),
                op_arg_dat(domain.p_vnewc, 0, current_map, 1, "double", OP_READ)
                );
-   #if USE_DIRTY_BIT_OPT 
-   domain.p_p_new->dirtybit=0;
-   #endif
 }
 
 /******************************************/
@@ -1363,9 +1354,6 @@ void CalcEnergyForElems(int region)
                op_arg_dat(local_region_i_p_q_old, -1, OP_ID, 1, "double", OP_READ),
                op_arg_dat(local_region_i_p_work, -1, OP_ID, 1, "double", OP_READ)
    );
-   #if USE_DIRTY_BIT_OPT 
-   domain.p_e_new->dirtybit=0;
-   #endif
    CalcPressureForElemsHalfstep(region);
 
    //NOTE domain.p_e_new may be an INC
@@ -1382,19 +1370,14 @@ void CalcEnergyForElems(int region)
                op_arg_dat(local_region_i_p_p_old, -1, OP_ID, 1, "double", OP_READ),
                op_arg_dat(local_region_i_p_q_old, -1, OP_ID, 1, "double", OP_READ)
    );
-   #if USE_DIRTY_BIT_OPT 
-   domain.p_q_new->dirtybit=0;
-   domain.p_e_new->dirtybit=0;
-   #endif
+
 
    //NOTE domain.p_e_new may be an INC
    op_par_loop(CalcNewEStep3, "CalcNewEStep3", current_set,
                op_arg_dat(local_region_i_p_e_new, -1, OP_ID, 1, "double", OP_RW),
                op_arg_dat(local_region_i_p_work, -1, OP_ID, 1, "double", OP_READ)
    );
-   #if USE_DIRTY_BIT_OPT 
-   domain.p_e_new->dirtybit=0;
-   #endif
+
    CalcPressureForElems(region);
 
    //NOTE domain.p_e_new may be an INC
@@ -1412,9 +1395,7 @@ void CalcEnergyForElems(int region)
                op_arg_dat(local_region_i_p_q_new, -1, OP_ID, 1, "double", OP_READ),
                op_arg_dat(local_region_i_p_pHalfStep, -1, OP_ID, 1, "double", OP_READ)
    );
-   #if USE_DIRTY_BIT_OPT 
-   domain.p_e_new->dirtybit=0;
-   #endif
+
    CalcPressureForElems(region);
    //NOTE p_q_new could probably be a write
    op_par_loop(CalcQNew, "CalcQNew", current_set,
@@ -1428,10 +1409,6 @@ void CalcEnergyForElems(int region)
                op_arg_dat(local_region_i_p_ql_old, -1, OP_ID, 1, "double", OP_READ),
                op_arg_dat(local_region_i_p_qq_old, -1, OP_ID, 1, "double", OP_READ)
                );
-   #if USE_DIRTY_BIT_OPT
-   domain.p_q_new->dirtybit=0;
-   #endif
-
    return ;
 }
 
@@ -1456,7 +1433,9 @@ void CalcSoundSpeedForElems(int region)
                op_arg_dat(local_region_i_p_p_new, -1, OP_ID, 1, "double", OP_READ),
                op_arg_dat(domain.p_ss, 0, current_map, 1, "double", OP_WRITE)
                );
+   #if USE_DIRTY_BIT_OPT
    domain.p_ss->dirtybit=0;
+   #endif
 }
 
 /******************************************/
@@ -1516,16 +1495,7 @@ void EvalEOSForElems(int region, int rep)
                op_arg_dat(local_region_i_p_q_old, -1, OP_ID, 1, "double", OP_WRITE), op_arg_dat(domain.p_q, 0, current_map, 1, "double", OP_READ),
                op_arg_dat(local_region_i_p_qq_old, -1, OP_ID, 1, "double", OP_WRITE), op_arg_dat(domain.p_qq, 0, current_map, 1, "double", OP_READ),
                op_arg_dat(local_region_i_p_ql_old, -1, OP_ID, 1, "double", OP_WRITE), op_arg_dat(domain.p_ql, 0, current_map, 1, "double", OP_READ));
-   
-   
-   #if USE_DIRTY_BIT_OPT 
-   domain.p_e_old->dirtybit=0;
-   domain.p_delvc->dirtybit=0;
-   domain.p_p_old->dirtybit=0;
-   domain.p_q_old->dirtybit=0;
-   domain.p_qq_old->dirtybit=0;
-   domain.p_ql_old->dirtybit=0;
-   #endif
+
    for(int j = 0; j < rep; j++) {
       /* compress data, minimal set */
 
@@ -1537,10 +1507,6 @@ void EvalEOSForElems(int region, int rep)
                      op_arg_dat(local_region_i_p_delvc, -1, OP_ID, 1, "double", OP_READ),
                      op_arg_dat(local_region_i_p_compHalfStep, -1, OP_ID, 1, "double", OP_WRITE)
          );
-#if USE_DIRTY_BIT_OPT 
-         domain.p_compression->dirtybit=0;
-         domain.p_ql_old->dirtybit=0;
-#endif
 
       /* Check for v > eosvmax or v < eosvmin */
          if ( eosvmin != double(0.) ) {
@@ -1550,9 +1516,7 @@ void EvalEOSForElems(int region, int rep)
                         op_arg_dat(local_region_i_p_compression, -1, OP_ID, 1, "double", OP_READ)
             );
          }
-         #if USE_DIRTY_BIT_OPT 
-         domain.p_compHalfStep->dirtybit=0;
-         #endif
+
          if ( eosvmax != double(0.) ) {
             op_par_loop(CheckEOSUpperBound, "CheckEOSUpperBound", current_set,
                         op_arg_dat(domain.p_vnewc, 0, current_map, 1, "double", OP_READ),
@@ -1561,25 +1525,28 @@ void EvalEOSForElems(int region, int rep)
                         op_arg_dat(local_region_i_p_p_old, -1, OP_ID, 1, "double", OP_WRITE)
             );
          }
-         #if USE_DIRTY_BIT_OPT 
-         domain.p_compression->dirtybit=0;
-         domain.p_ql_old->dirtybit=0;
-         domain.p_compHalfStep->dirtybit=0;
-         #endif
+
          op_par_loop(CalcEOSWork, "CalcEOSWork", current_set,
                      op_arg_dat(local_region_i_p_work, -1, OP_ID, 1 , "double", OP_WRITE));
-         #if USE_DIRTY_BIT_OPT
-         domain.p_work->dirtybit=0;
-         #endif
-
       CalcEnergyForElems(region);
    }
-
+   #if USE_DIRTY_BIT_OPT 
+   local_region_i_p_p_new->dirtybit=0;
+   local_region_i_p_e_new->dirtybit=0;
+   local_region_i_p_q_new->dirtybit=0;
+   #endif
    op_par_loop(CopyTempEOSVarsBack, "CopyTempEOSVarsBack", current_set,
                op_arg_dat(domain.p_p, 0, current_map, 1, "double", OP_WRITE), op_arg_dat(local_region_i_p_p_new, -1, OP_ID, 1, "double", OP_READ),
                op_arg_dat(domain.p_e, 0, current_map, 1, "double", OP_WRITE), op_arg_dat(local_region_i_p_e_new, -1, OP_ID, 1, "double", OP_READ),
                op_arg_dat(domain.p_q, 0, current_map, 1, "double", OP_WRITE), op_arg_dat(local_region_i_p_q_new, -1, OP_ID, 1, "double", OP_READ)
    );
+   //I could write a paragraph on this.....
+   // SO this imporvens things by about 1 second on a 5 proces run size 30 takes ~ 11 seconds
+   //    or a 5-10% imporvment
+   // without this the full data sets for p_p p_e and -p_q are exhnaged each time this combined with 
+   // code later on only exchanges it once an interesting outcome
+   // the exchange is not required as it is write only and every domain is disjoint
+   // This is an area that OP2 is not desinged for as there is no knowlage of distinct subsets 
    #if USE_DIRTY_BIT_OPT 
    domain.p_p->dirtybit=0;
    domain.p_e->dirtybit=0;
@@ -1650,23 +1617,10 @@ void ApplyMaterialPropertiesForElems()
        EvalEOSForElems( r , rep);
    }
    #if USE_DIRTY_BIT_OPT
-   domain.p_e_old->dirtybit=1; //only here               //DONE
-   domain.p_delvc->dirtybit=1; //only here               //DONE
-   domain.p_p_old->dirtybit=1; //only here               //DONE
-   domain.p_q_old->dirtybit=1; //only here               //DONE
-   domain.p_qq_old->dirtybit=1; //only here              //DONE
-   domain.p_ql_old->dirtybit=1; //only here              //DONE
-   domain.p_compHalfStep->dirtybit=1; //only here        //DONE
-   domain.p_pHalfStep->dirtybit=0;
-   domain.p_work->dirtybit=1; //only here                //DONE
    domain.p_p->dirtybit=1; //global can be copied out
    domain.p_e->dirtybit=1; //global can be copied out
    domain.p_q->dirtybit=1; //global can be copied out
-   domain.p_e_new->dirtybit=1;      //only here          //DONE
-   domain.p_q_new->dirtybit=1;      //only here          //DONE
-   domain.p_p_new->dirtybit=1;      //only here          //DONE
-   domain.p_bvc->dirtybit=1;        //only here
-   domain.p_pbvc->dirtybit=1;       //only here
+   domain.p_ss->dirtybit=1;
    #endif
 
    //  Release(&vnewc) ;
@@ -2172,7 +2126,6 @@ int main(int argc, char *argv[])
    }
 
    if (opts.time){op_timing_output();}
-
    
    op_par_loop(CalcSpeed, "CalcSpeed", domain.nodes,
          op_arg_dat(p_speed, -1, OP_ID, 1, "double", OP_WRITE),
