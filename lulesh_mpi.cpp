@@ -1993,11 +1993,11 @@ int main(int argc, char *argv[])
 
    domain = initialiseALL(opts,myRank,(Int8_t)numRanks);
 
-   writeFileADHFJ(myRank,
-   domain.p_x->set->size+domain.p_x->set->exec_size+domain.p_x->set->nonexec_size,
-   (double *)domain.p_x->data,
-   (double *)domain.p_y->data,
-   (double *)domain.p_z->data,"/home/joseph/3rdYear/testingFolder/partitioning/Before/Node");
+   // writeFileADHFJ(myRank,
+   // domain.p_x->set->size+domain.p_x->set->exec_size+domain.p_x->set->nonexec_size,
+   // (double *)domain.p_x->data,
+   // (double *)domain.p_y->data,
+   // (double *)domain.p_z->data,"/home/joseph/3rdYear/testingFolder/partitioning/Before/Node");
 
    double * speed=(double *)malloc(m_numNode*sizeof(double));
    op_dat p_speed=op_decl_dat(domain.nodes, 1, "double", speed, "p_speed");
@@ -2008,7 +2008,7 @@ int main(int argc, char *argv[])
    if (myRank==0){printf("\n\n");}
    op_diagnostic_output();
 
-   op_dump_to_hdf5("/home/joseph/3rdYear/TestOut");
+   // op_dump_to_hdf5("/home/joseph/3rdYear/TestOut");
    switch (opts.partition)
    {
       case Partition_S:
@@ -2049,12 +2049,12 @@ int main(int argc, char *argv[])
 
 
 
-   // SHOW THE CUBE AS DIVIDED
-   writeFileADHFJ(myRank,
-   domain.p_x->set->size+domain.p_x->set->exec_size+domain.p_x->set->nonexec_size,
-   (double *)domain.p_x->data,
-   (double *)domain.p_y->data,
-   (double *)domain.p_z->data,"/home/joseph/3rdYear/testingFolder/partitioning/After/Node");
+   // // SHOW THE CUBE AS DIVIDED
+   // writeFileADHFJ(myRank,
+   // domain.p_x->set->size+domain.p_x->set->exec_size+domain.p_x->set->nonexec_size,
+   // (double *)domain.p_x->data,
+   // (double *)domain.p_y->data,
+   // (double *)domain.p_z->data,"/home/joseph/3rdYear/testingFolder/partitioning/After/Node");
 
    printf("DONE\n");
    // writeFileADHFJ(myRank,p_x->set->nonexec_size+p_x->set->exec_size,(double *)p_x->data,(double *)p_y->data,(double *)p_z->data,"/home/joseph/3rdYear/testingFolder/partitioning/All/Node");
