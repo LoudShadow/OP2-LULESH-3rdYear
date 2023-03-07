@@ -210,6 +210,24 @@ struct Domain{
    op_map* region_i_to_lzetam;
    op_map* region_i_to_lzetap;
 
+   op_dat* region_i_p_e_old;
+   op_dat* region_i_p_delvc;
+   op_dat* region_i_p_p_old;
+   op_dat* region_i_p_q_old;
+   op_dat* region_i_p_qq_old;
+   op_dat* region_i_p_ql_old;
+
+   op_dat* region_i_p_compHalfStep;
+   op_dat* region_i_p_pHalfStep;
+   op_dat* region_i_p_compression;
+   
+   op_dat* region_i_p_work;
+   op_dat* region_i_p_e_new;
+   op_dat* region_i_p_q_new;
+   op_dat* region_i_p_p_new;
+   op_dat* region_i_p_bvc;
+   op_dat* region_i_p_pbvc;
+
    op_dat p_x;
    op_dat p_y;
    op_dat p_z;
@@ -798,6 +816,22 @@ Domain initOp2Vars(int myRank,int m_numElem,int m_numNode){
    domain.region_i_to_lzetam = (op_map*)malloc(m_numReg* sizeof(op_map));
    domain.region_i_to_lzetap = (op_map*)malloc(m_numReg* sizeof(op_map));
 
+   domain.region_i_p_e_old = (op_dat*)malloc(m_numReg* sizeof(op_dat));
+   domain.region_i_p_delvc = (op_dat*)malloc(m_numReg* sizeof(op_dat));
+   domain.region_i_p_p_old = (op_dat*)malloc(m_numReg* sizeof(op_dat));
+   domain.region_i_p_q_old = (op_dat*)malloc(m_numReg* sizeof(op_dat));
+   domain.region_i_p_qq_old = (op_dat*)malloc(m_numReg* sizeof(op_dat));
+   domain.region_i_p_ql_old = (op_dat*)malloc(m_numReg* sizeof(op_dat));
+
+   domain.region_i_p_compHalfStep = (op_dat*)malloc(m_numReg* sizeof(op_dat));
+   domain.region_i_p_pHalfStep = (op_dat*)malloc(m_numReg* sizeof(op_dat));
+   domain.region_i_p_compression = (op_dat*)malloc(m_numReg* sizeof(op_dat));
+   domain.region_i_p_work = (op_dat*)malloc(m_numReg* sizeof(op_dat));
+   domain.region_i_p_e_new = (op_dat*)malloc(m_numReg* sizeof(op_dat));
+   domain.region_i_p_q_new = (op_dat*)malloc(m_numReg* sizeof(op_dat));
+   domain.region_i_p_p_new = (op_dat*)malloc(m_numReg* sizeof(op_dat));
+   domain.region_i_p_bvc = (op_dat*)malloc(m_numReg* sizeof(op_dat));
+   domain.region_i_p_pbvc = (op_dat*)malloc(m_numReg* sizeof(op_dat));
 
 
    char regionName[20];
@@ -829,6 +863,45 @@ Domain initOp2Vars(int myRank,int m_numElem,int m_numNode){
       domain.region_i_to_lzetam[i] = op_decl_map(domain.region_i[i],domain.elems,1,&(m_region_i_to_lzetam[offset]),mapName);
       sprintf(mapName,"region_%d_to_lzetap",i);
       domain.region_i_to_lzetap[i] = op_decl_map(domain.region_i[i],domain.elems,1,&(m_region_i_to_lzetap[offset]),mapName);
+
+      printf("HERE\n");
+      sprintf(mapName,"region_%d_p_e_old",i);
+      domain.region_i_p_e_old[i] = op_decl_dat(domain.region_i[i],1,"double",&(e_old[offset]),mapName);
+      sprintf(mapName,"region_%d_P_delvc",i);
+      domain.region_i_p_delvc[i] = op_decl_dat(domain.region_i[i],1,"double",&(delvc[offset]),mapName);
+      sprintf(mapName,"region_%d_p_p_old",i);
+      domain.region_i_p_p_old[i] = op_decl_dat(domain.region_i[i],1,"double",&(p_old[offset]),mapName);
+      sprintf(mapName,"region_%d_p_q_old",i);
+      domain.region_i_p_q_old[i] = op_decl_dat(domain.region_i[i],1,"double",&(q_old[offset]),mapName);
+      sprintf(mapName,"region_%d_p_qq_old",i);
+      domain.region_i_p_qq_old[i] = op_decl_dat(domain.region_i[i],1,"double",&(qq_old[offset]),mapName);
+      sprintf(mapName,"region_%d_p_ql_old",i);
+      domain.region_i_p_ql_old[i] = op_decl_dat(domain.region_i[i],1,"double",&(ql_old[offset]),mapName);
+
+      printf("HERE 1\n");
+      sprintf(mapName,"region_%d_p_compH",i);
+      domain.region_i_p_compHalfStep[i] = op_decl_dat(domain.region_i[i],1,"double",&(compHalfStep[offset]),mapName);
+      printf("HERE 2\n");
+      sprintf(mapName,"region_%d_p_pHalf",i);
+      domain.region_i_p_pHalfStep[i] = op_decl_dat(domain.region_i[i],1,"double",&(pHalfStep[offset]),mapName);
+      printf("HERE 3\n");
+      sprintf(mapName,"region_%d_p_comp",i);
+      domain.region_i_p_compression[i] = op_decl_dat(domain.region_i[i],1,"double",&(compression[offset]),mapName);
+      printf("HERE 4\n");
+      sprintf(mapName,"region_%d_p_work",i);
+      domain.region_i_p_work[i] = op_decl_dat(domain.region_i[i],1,"double",&(work[offset]),mapName);
+
+      printf("HERE 2\n");
+      sprintf(mapName,"region_%d_p_e_new",i);
+      domain.region_i_p_e_new[i] = op_decl_dat(domain.region_i[i],1,"double",&(e_new[offset]),mapName);
+      sprintf(mapName,"region_%d_p_q_new",i);
+      domain.region_i_p_q_new[i] = op_decl_dat(domain.region_i[i],1,"double",&(q_new[offset]),mapName);
+      sprintf(mapName,"region_%d_p_p_new",i);
+      domain.region_i_p_p_new[i] = op_decl_dat(domain.region_i[i],1,"double",&(p_new[offset]),mapName);
+      sprintf(mapName,"region_%d_p_bvc",i);
+      domain.region_i_p_bvc[i] = op_decl_dat(domain.region_i[i],1,"double",&(bvc[offset]),mapName);
+      sprintf(mapName,"region_%d_p_pbvc",i);
+      domain.region_i_p_pbvc[i] = op_decl_dat(domain.region_i[i],1,"double",&(pbvc[offset]),mapName);
 
       offset+=m_regElemSize[i];
    }

@@ -1271,19 +1271,28 @@ void CalcPressureForElemsHalfstep(int region)
 {
    op_set current_set= domain.region_i[region];
    op_map current_map = domain.region_i_to_elems[region];
+
+   op_dat local_region_i_p_e_new = domain.region_i_p_e_new[region];
+   op_dat local_region_i_p_p_new = domain.region_i_p_p_new[region];
+
+   op_dat local_region_i_p_compHalfStep = domain.region_i_p_compHalfStep[region];
+   op_dat local_region_i_p_pHalfStep = domain.region_i_p_pHalfStep[region];
+   op_dat local_region_i_p_bvc = domain.region_i_p_bvc[region];
+   op_dat local_region_i_p_pbvc = domain.region_i_p_pbvc[region];
+
    op_par_loop(CalcHalfStepBVC, "CalcHalfStepBVC", current_set,
-               op_arg_dat(domain.p_bvc, 0, current_map, 1, "double", OP_WRITE),
-               op_arg_dat(domain.p_compHalfStep, 0, current_map, 1, "double", OP_READ),
-               op_arg_dat(domain.p_pbvc, 0, current_map, 1, "double", OP_WRITE));
+               op_arg_dat(local_region_i_p_bvc, -1, OP_ID, 1, "double", OP_WRITE),
+               op_arg_dat(local_region_i_p_compHalfStep, -1, OP_ID, 1, "double", OP_READ),
+               op_arg_dat(local_region_i_p_pbvc, -1, OP_ID, 1, "double", OP_WRITE));
    domain.p_bvc->dirtybit=0;
    domain.p_pbvc->dirtybit=0;
 
 
    //NOTE changed p_pHalfStep to write review
    op_par_loop(CalcPHalfstep, "CalcPHalfstep", current_set,
-               op_arg_dat(domain.p_pHalfStep, 0, current_map, 1, "double", OP_WRITE),
-               op_arg_dat(domain.p_bvc, 0, current_map, 1, "double", OP_READ),
-               op_arg_dat(domain.p_e_new, 0, current_map, 1, "double", OP_READ),
+               op_arg_dat(local_region_i_p_pHalfStep, -1, OP_ID, 1, "double", OP_WRITE),
+               op_arg_dat(local_region_i_p_bvc, -1, OP_ID, 1, "double", OP_READ),
+               op_arg_dat(local_region_i_p_e_new, -1, OP_ID, 1, "double", OP_READ),
                op_arg_dat(domain.p_vnewc, 0, current_map, 1, "double", OP_READ)
                );
    domain.p_pHalfStep->dirtybit=0;
@@ -1294,18 +1303,25 @@ void CalcPressureForElems(int region)
 {
    op_set current_set= domain.region_i[region];
    op_map current_map = domain.region_i_to_elems[region];
+
+   op_dat local_region_i_p_e_new = domain.region_i_p_e_new[region];
+   op_dat local_region_i_p_p_new = domain.region_i_p_p_new[region];
+   op_dat local_region_i_p_compression = domain.region_i_p_compression[region];
+   op_dat local_region_i_p_bvc = domain.region_i_p_bvc[region];
+   op_dat local_region_i_p_pbvc = domain.region_i_p_pbvc[region];
+
    op_par_loop(CalcBVC, "CalcBVC", current_set,
-               op_arg_dat(domain.p_bvc, 0, current_map, 1, "double", OP_WRITE),
-               op_arg_dat(domain.p_compression, 0, current_map, 1, "double", OP_READ),
-               op_arg_dat(domain.p_pbvc, 0, current_map, 1, "double", OP_WRITE));
+               op_arg_dat(local_region_i_p_bvc, -1, OP_ID, 1, "double", OP_WRITE),
+               op_arg_dat(local_region_i_p_compression, -1, OP_ID, 1, "double", OP_READ),
+               op_arg_dat(local_region_i_p_pbvc, -1, OP_ID, 1, "double", OP_WRITE));
    #if USE_DIRTY_BIT_OPT 
    domain.p_bvc->dirtybit=0;
    domain.p_pbvc->dirtybit=0;
    #endif
-   op_par_loop(CalcPNew, "CalcPNew", current_set,0
-               op_arg_dat(domain.p_p_new, 0, current_map, 1, "double", OP_WRITE),
-               op_arg_dat(domain.p_bvc, 0, current_map, 1, "double", OP_READ),
-               op_arg_dat(domain.p_e_new, 0, current_map, 1, "double", OP_READ),
+   op_par_loop(CalcPNew, "CalcPNew", current_set,
+               op_arg_dat(local_region_i_p_p_new, -1, OP_ID, 1, "double", OP_WRITE),
+               op_arg_dat(local_region_i_p_bvc, -1, OP_ID, 1, "double", OP_READ),
+               op_arg_dat(local_region_i_p_e_new, -1, OP_ID, 1, "double", OP_READ),
                op_arg_dat(domain.p_vnewc, 0, current_map, 1, "double", OP_READ)
                );
    #if USE_DIRTY_BIT_OPT 
@@ -1322,13 +1338,30 @@ void CalcEnergyForElems(int region)
    op_set current_set= domain.region_i[region];
    op_map current_map = domain.region_i_to_elems[region];
 
+   op_dat local_region_i_p_e_old = domain.region_i_p_e_old[region];
+   op_dat local_region_i_p_delvc = domain.region_i_p_delvc[region];
+   op_dat local_region_i_p_p_old = domain.region_i_p_p_old[region];
+   op_dat local_region_i_p_q_old = domain.region_i_p_q_old[region];
+   op_dat local_region_i_p_qq_old = domain.region_i_p_qq_old[region];
+   op_dat local_region_i_p_ql_old = domain.region_i_p_ql_old[region];
+
+   op_dat local_region_i_p_compHalfStep = domain.region_i_p_compHalfStep[region];
+   op_dat local_region_i_p_pHalfStep = domain.region_i_p_pHalfStep[region];
+   op_dat local_region_i_p_work = domain.region_i_p_work[region];
+
+   op_dat local_region_i_p_e_new = domain.region_i_p_e_new[region];
+   op_dat local_region_i_p_q_new = domain.region_i_p_q_new[region];
+   op_dat local_region_i_p_p_new = domain.region_i_p_p_new[region];
+   op_dat local_region_i_p_bvc = domain.region_i_p_bvc[region];
+   op_dat local_region_i_p_pbvc = domain.region_i_p_pbvc[region];
+
    op_par_loop(CalcNewE, "CalcNewE", current_set,
-               op_arg_dat(domain.p_e_new, 0, current_map, 1, "double", OP_WRITE),
-               op_arg_dat(domain.p_e_old, 0, current_map, 1, "double", OP_READ),
-               op_arg_dat(domain.p_delvc, 0, current_map, 1, "double", OP_READ),
-               op_arg_dat(domain.p_p_old, 0, current_map, 1, "double", OP_READ),
-               op_arg_dat(domain.p_q_old, 0, current_map, 1, "double", OP_READ),
-               op_arg_dat(domain.p_work, 0, current_map, 1, "double", OP_READ)
+               op_arg_dat(local_region_i_p_e_new, -1, OP_ID, 1, "double", OP_WRITE),
+               op_arg_dat(local_region_i_p_e_old, -1, OP_ID, 1, "double", OP_READ),
+               op_arg_dat(local_region_i_p_delvc, -1, OP_ID, 1, "double", OP_READ),
+               op_arg_dat(local_region_i_p_p_old, -1, OP_ID, 1, "double", OP_READ),
+               op_arg_dat(local_region_i_p_q_old, -1, OP_ID, 1, "double", OP_READ),
+               op_arg_dat(local_region_i_p_work, -1, OP_ID, 1, "double", OP_READ)
    );
    #if USE_DIRTY_BIT_OPT 
    domain.p_e_new->dirtybit=0;
@@ -1337,17 +1370,17 @@ void CalcEnergyForElems(int region)
 
    //NOTE domain.p_e_new may be an INC
    op_par_loop(CalcNewEStep2, "CalcNewEStep2", current_set,
-               op_arg_dat(domain.p_compHalfStep, 0, current_map, 1, "double", OP_READ),
-               op_arg_dat(domain.p_delvc, 0, current_map, 1, "double", OP_READ),
-               op_arg_dat(domain.p_q_new, 0, current_map, 1, "double", OP_RW),
-               op_arg_dat(domain.p_pbvc, 0, current_map, 1, "double", OP_READ),
-               op_arg_dat(domain.p_e_new, 0, current_map, 1, "double", OP_RW),
-               op_arg_dat(domain.p_bvc, 0, current_map, 1, "double", OP_READ),
-               op_arg_dat(domain.p_pHalfStep, 0, current_map, 1, "double", OP_READ),
-               op_arg_dat(domain.p_ql_old, 0, current_map, 1, "double", OP_READ),
-               op_arg_dat(domain.p_qq_old, 0, current_map, 1, "double", OP_READ),
-               op_arg_dat(domain.p_p_old, 0, current_map, 1, "double", OP_READ),
-               op_arg_dat(domain.p_q_old, 0, current_map, 1, "double", OP_READ)
+               op_arg_dat(local_region_i_p_compHalfStep, -1, OP_ID, 1, "double", OP_READ),
+               op_arg_dat(local_region_i_p_delvc, -1, OP_ID, 1, "double", OP_READ),
+               op_arg_dat(local_region_i_p_q_new, -1, OP_ID, 1, "double", OP_RW),
+               op_arg_dat(local_region_i_p_pbvc, -1, OP_ID, 1, "double", OP_READ),
+               op_arg_dat(local_region_i_p_e_new, -1, OP_ID, 1, "double", OP_RW),
+               op_arg_dat(local_region_i_p_bvc, -1, OP_ID, 1, "double", OP_READ),
+               op_arg_dat(local_region_i_p_pHalfStep, -1, OP_ID, 1, "double", OP_READ),
+               op_arg_dat(local_region_i_p_ql_old, -1, OP_ID, 1, "double", OP_READ),
+               op_arg_dat(local_region_i_p_qq_old, -1, OP_ID, 1, "double", OP_READ),
+               op_arg_dat(local_region_i_p_p_old, -1, OP_ID, 1, "double", OP_READ),
+               op_arg_dat(local_region_i_p_q_old, -1, OP_ID, 1, "double", OP_READ)
    );
    #if USE_DIRTY_BIT_OPT 
    domain.p_q_new->dirtybit=0;
@@ -1356,8 +1389,8 @@ void CalcEnergyForElems(int region)
 
    //NOTE domain.p_e_new may be an INC
    op_par_loop(CalcNewEStep3, "CalcNewEStep3", current_set,
-               op_arg_dat(domain.p_e_new, 0, current_map, 1, "double", OP_RW),
-               op_arg_dat(domain.p_work, 0, current_map, 1, "double", OP_READ)
+               op_arg_dat(local_region_i_p_e_new, -1, OP_ID, 1, "double", OP_RW),
+               op_arg_dat(local_region_i_p_work, -1, OP_ID, 1, "double", OP_READ)
    );
    #if USE_DIRTY_BIT_OPT 
    domain.p_e_new->dirtybit=0;
@@ -1366,18 +1399,18 @@ void CalcEnergyForElems(int region)
 
    //NOTE domain.p_e_new may be an INC
    op_par_loop(CalcNewEStep4, "CalcNewEStep4", current_set,
-               op_arg_dat(domain.p_delvc, 0, current_map, 1, "double", OP_READ),
-               op_arg_dat(domain.p_pbvc, 0, current_map, 1, "double", OP_READ),
-               op_arg_dat(domain.p_e_new, 0, current_map, 1, "double", OP_RW),
+               op_arg_dat(local_region_i_p_delvc, -1, OP_ID, 1, "double", OP_READ),
+               op_arg_dat(local_region_i_p_pbvc, -1, OP_ID, 1, "double", OP_READ),
+               op_arg_dat(local_region_i_p_e_new, -1, OP_ID, 1, "double", OP_RW),
                op_arg_dat(domain.p_vnewc, 0, current_map, 1, "double", OP_READ),
-               op_arg_dat(domain.p_bvc, 0, current_map, 1, "double", OP_READ),
-               op_arg_dat(domain.p_p_new, 0, current_map, 1, "double", OP_READ),
-               op_arg_dat(domain.p_ql_old, 0, current_map, 1, "double", OP_READ),
-               op_arg_dat(domain.p_qq_old, 0, current_map, 1, "double", OP_READ),
-               op_arg_dat(domain.p_p_old, 0, current_map, 1, "double", OP_READ),
-               op_arg_dat(domain.p_q_old, 0, current_map, 1, "double", OP_READ),
-               op_arg_dat(domain.p_q_new, 0, current_map, 1, "double", OP_READ),
-               op_arg_dat(domain.p_pHalfStep, 0, current_map, 1, "double", OP_READ)
+               op_arg_dat(local_region_i_p_bvc, -1, OP_ID, 1, "double", OP_READ),
+               op_arg_dat(local_region_i_p_p_new, -1, OP_ID, 1, "double", OP_READ),
+               op_arg_dat(local_region_i_p_ql_old, -1, OP_ID, 1, "double", OP_READ),
+               op_arg_dat(local_region_i_p_qq_old, -1, OP_ID, 1, "double", OP_READ),
+               op_arg_dat(local_region_i_p_p_old, -1, OP_ID, 1, "double", OP_READ),
+               op_arg_dat(local_region_i_p_q_old, -1, OP_ID, 1, "double", OP_READ),
+               op_arg_dat(local_region_i_p_q_new, -1, OP_ID, 1, "double", OP_READ),
+               op_arg_dat(local_region_i_p_pHalfStep, -1, OP_ID, 1, "double", OP_READ)
    );
    #if USE_DIRTY_BIT_OPT 
    domain.p_e_new->dirtybit=0;
@@ -1385,15 +1418,15 @@ void CalcEnergyForElems(int region)
    CalcPressureForElems(region);
    //NOTE p_q_new could probably be a write
    op_par_loop(CalcQNew, "CalcQNew", current_set,
-               op_arg_dat(domain.p_delvc, 0, current_map, 1, "double", OP_READ),
-               op_arg_dat(domain.p_pbvc, 0, current_map, 1, "double", OP_READ),
-               op_arg_dat(domain.p_e_new, 0, current_map, 1, "double", OP_READ),
+               op_arg_dat(local_region_i_p_delvc, -1, OP_ID, 1, "double", OP_READ),
+               op_arg_dat(local_region_i_p_pbvc, -1, OP_ID, 1, "double", OP_READ),
+               op_arg_dat(local_region_i_p_e_new, -1, OP_ID, 1, "double", OP_READ),
                op_arg_dat(domain.p_vnewc, 0, current_map, 1, "double", OP_READ),
-               op_arg_dat(domain.p_bvc, 0, current_map, 1, "double", OP_READ),
-               op_arg_dat(domain.p_p_new, 0, current_map, 1, "double", OP_READ),
-               op_arg_dat(domain.p_q_new, 0, current_map, 1, "double", OP_RW),
-               op_arg_dat(domain.p_ql_old, 0, current_map, 1, "double", OP_READ),
-               op_arg_dat(domain.p_qq_old, 0, current_map, 1, "double", OP_READ)
+               op_arg_dat(local_region_i_p_bvc, -1, OP_ID, 1, "double", OP_READ),
+               op_arg_dat(local_region_i_p_p_new, -1, OP_ID, 1, "double", OP_READ),
+               op_arg_dat(local_region_i_p_q_new, -1, OP_ID, 1, "double", OP_RW),
+               op_arg_dat(local_region_i_p_ql_old, -1, OP_ID, 1, "double", OP_READ),
+               op_arg_dat(local_region_i_p_qq_old, -1, OP_ID, 1, "double", OP_READ)
                );
    #if USE_DIRTY_BIT_OPT
    domain.p_q_new->dirtybit=0;
@@ -1409,12 +1442,18 @@ void CalcSoundSpeedForElems(int region)
 {
    op_set current_set= domain.region_i[region];
    op_map current_map = domain.region_i_to_elems[region];
+
+   op_dat local_region_i_p_e_new = domain.region_i_p_e_new[region];
+   op_dat local_region_i_p_p_new = domain.region_i_p_p_new[region];
+   op_dat local_region_i_p_bvc = domain.region_i_p_bvc[region];
+   op_dat local_region_i_p_pbvc = domain.region_i_p_pbvc[region];
+
    op_par_loop(CalcSoundSpeedForElem, "CalcSoundSpeedForElem", current_set,
-               op_arg_dat(domain.p_pbvc, 0, current_map, 1, "double", OP_READ),
-               op_arg_dat(domain.p_e_new, 0, current_map, 1, "double", OP_READ),
+               op_arg_dat(local_region_i_p_pbvc, -1, OP_ID, 1, "double", OP_READ),
+               op_arg_dat(local_region_i_p_e_new, -1, OP_ID, 1, "double", OP_READ),
                op_arg_dat(domain.p_vnewc, 0, current_map, 1, "double", OP_READ),
-               op_arg_dat(domain.p_bvc, 0, current_map, 1, "double", OP_READ),
-               op_arg_dat(domain.p_p_new, 0, current_map, 1, "double", OP_READ),
+               op_arg_dat(local_region_i_p_bvc, -1, OP_ID, 1, "double", OP_READ),
+               op_arg_dat(local_region_i_p_p_new, -1, OP_ID, 1, "double", OP_READ),
                op_arg_dat(domain.p_ss, 0, current_map, 1, "double", OP_WRITE)
                );
    domain.p_ss->dirtybit=0;
@@ -1444,14 +1483,41 @@ void EvalEOSForElems(int region, int rep)
    op_set current_set= domain.region_i[region];
    op_map current_map = domain.region_i_to_elems[region];
 
+   op_dat local_region_i_p_e_old = domain.region_i_p_e_old[region];
+   op_dat local_region_i_p_delvc = domain.region_i_p_delvc[region];
+   op_dat local_region_i_p_p_old = domain.region_i_p_p_old[region];
+   op_dat local_region_i_p_q_old = domain.region_i_p_q_old[region];
+   op_dat local_region_i_p_qq_old = domain.region_i_p_qq_old[region];
+   op_dat local_region_i_p_ql_old = domain.region_i_p_ql_old[region];
+
+   op_dat local_region_i_p_compHalfStep = domain.region_i_p_compHalfStep[region];
+   op_dat local_region_i_p_compression = domain.region_i_p_compression[region];
+   op_dat local_region_i_p_work = domain.region_i_p_work[region];
+
+   op_dat local_region_i_p_e_new = domain.region_i_p_e_new[region];
+   op_dat local_region_i_p_q_new = domain.region_i_p_q_new[region];
+   op_dat local_region_i_p_p_new = domain.region_i_p_p_new[region];
+
+   op_dat local_region_i_p_bvc = domain.region_i_p_bvc[region];
+   op_dat local_region_i_p_pbvc = domain.region_i_p_pbvc[region];
+
    //loop to add load imbalance based on region number 
+   // op_###_loop(CopyEOSValsIntoArray, "CopyEOSValsIntoArray", current_set,
+   //             op_arg_dat(domain.p_e_old, 0, current_map, 1, "double", OP_WRITE), op_arg_dat(domain.p_e, 0, current_map, 1, "double", OP_READ),
+   //             op_arg_dat(domain.p_delvc, 0, current_map, 1, "double", OP_WRITE), op_arg_dat(domain.p_delv, 0, current_map, 1, "double", OP_READ),
+   //             op_arg_dat(domain.p_p_old, 0, current_map, 1, "double", OP_WRITE), op_arg_dat(domain.p_p, 0, current_map, 1, "double", OP_READ),
+   //             op_arg_dat(domain.p_q_old, 0, current_map, 1, "double", OP_WRITE), op_arg_dat(domain.p_q, 0, current_map, 1, "double", OP_READ),
+   //             op_arg_dat(domain.p_qq_old, 0, current_map, 1, "double", OP_WRITE), op_arg_dat(domain.p_qq, 0, current_map, 1, "double", OP_READ),
+   //             op_arg_dat(domain.p_ql_old, 0, current_map, 1, "double", OP_WRITE), op_arg_dat(domain.p_ql, 0, current_map, 1, "double", OP_READ));
    op_par_loop(CopyEOSValsIntoArray, "CopyEOSValsIntoArray", current_set,
-               op_arg_dat(domain.p_e_old, 0, current_map, 1, "double", OP_WRITE), op_arg_dat(domain.p_e, 0, current_map, 1, "double", OP_READ),
-               op_arg_dat(domain.p_delvc, 0, current_map, 1, "double", OP_WRITE), op_arg_dat(domain.p_delv, 0, current_map, 1, "double", OP_READ),
-               op_arg_dat(domain.p_p_old, 0, current_map, 1, "double", OP_WRITE), op_arg_dat(domain.p_p, 0, current_map, 1, "double", OP_READ),
-               op_arg_dat(domain.p_q_old, 0, current_map, 1, "double", OP_WRITE), op_arg_dat(domain.p_q, 0, current_map, 1, "double", OP_READ),
-               op_arg_dat(domain.p_qq_old, 0, current_map, 1, "double", OP_WRITE), op_arg_dat(domain.p_qq, 0, current_map, 1, "double", OP_READ),
-               op_arg_dat(domain.p_ql_old, 0, current_map, 1, "double", OP_WRITE), op_arg_dat(domain.p_ql, 0, current_map, 1, "double", OP_READ));
+               op_arg_dat(local_region_i_p_e_old, -1, OP_ID, 1, "double", OP_WRITE), op_arg_dat(domain.p_e, 0, current_map, 1, "double", OP_READ),
+               op_arg_dat(local_region_i_p_delvc, -1, OP_ID, 1, "double", OP_WRITE), op_arg_dat(domain.p_delv, 0, current_map, 1, "double", OP_READ),
+               op_arg_dat(local_region_i_p_p_old, -1, OP_ID, 1, "double", OP_WRITE), op_arg_dat(domain.p_p, 0, current_map, 1, "double", OP_READ),
+               op_arg_dat(local_region_i_p_q_old, -1, OP_ID, 1, "double", OP_WRITE), op_arg_dat(domain.p_q, 0, current_map, 1, "double", OP_READ),
+               op_arg_dat(local_region_i_p_qq_old, -1, OP_ID, 1, "double", OP_WRITE), op_arg_dat(domain.p_qq, 0, current_map, 1, "double", OP_READ),
+               op_arg_dat(local_region_i_p_ql_old, -1, OP_ID, 1, "double", OP_WRITE), op_arg_dat(domain.p_ql, 0, current_map, 1, "double", OP_READ));
+   
+   
    #if USE_DIRTY_BIT_OPT 
    domain.p_e_old->dirtybit=0;
    domain.p_delvc->dirtybit=0;
@@ -1466,10 +1532,10 @@ void EvalEOSForElems(int region, int rep)
 
 
          op_par_loop(CalcHalfSteps, "CalcHalfSteps", current_set,
-                     op_arg_dat(domain.p_compression, 0, current_map, 1, "double", OP_WRITE),
+                     op_arg_dat(local_region_i_p_compression, -1, OP_ID, 1, "double", OP_WRITE),
                      op_arg_dat(domain.p_vnewc, 0, current_map, 1, "double", OP_READ),
-                     op_arg_dat(domain.p_delvc, 0, current_map, 1, "double", OP_READ),
-                     op_arg_dat(domain.p_compHalfStep, 0, current_map, 1, "double", OP_WRITE)
+                     op_arg_dat(local_region_i_p_delvc, -1, OP_ID, 1, "double", OP_READ),
+                     op_arg_dat(local_region_i_p_compHalfStep, -1, OP_ID, 1, "double", OP_WRITE)
          );
 #if USE_DIRTY_BIT_OPT 
          domain.p_compression->dirtybit=0;
@@ -1480,8 +1546,8 @@ void EvalEOSForElems(int region, int rep)
          if ( eosvmin != double(0.) ) {
             op_par_loop(CheckEOSLowerBound, "CheckEOSLowerBound", current_set,
                         op_arg_dat(domain.p_vnewc, 0, current_map, 1, "double", OP_READ),
-                        op_arg_dat(domain.p_compHalfStep, 0, current_map, 1, "double", OP_WRITE),
-                        op_arg_dat(domain.p_compression, 0, current_map, 1, "double", OP_READ)
+                        op_arg_dat(local_region_i_p_compHalfStep, -1, OP_ID, 1, "double", OP_WRITE),
+                        op_arg_dat(local_region_i_p_compression, -1, OP_ID, 1, "double", OP_READ)
             );
          }
          #if USE_DIRTY_BIT_OPT 
@@ -1490,9 +1556,9 @@ void EvalEOSForElems(int region, int rep)
          if ( eosvmax != double(0.) ) {
             op_par_loop(CheckEOSUpperBound, "CheckEOSUpperBound", current_set,
                         op_arg_dat(domain.p_vnewc, 0, current_map, 1, "double", OP_READ),
-                        op_arg_dat(domain.p_compHalfStep, 0, current_map, 1, "double", OP_WRITE),
-                        op_arg_dat(domain.p_compression, 0, current_map, 1, "double", OP_WRITE),
-                        op_arg_dat(domain.p_p_old, 0, current_map, 1, "double", OP_WRITE)
+                        op_arg_dat(local_region_i_p_compHalfStep, -1, OP_ID, 1, "double", OP_WRITE),
+                        op_arg_dat(local_region_i_p_compression, -1, OP_ID, 1, "double", OP_WRITE),
+                        op_arg_dat(local_region_i_p_p_old, -1, OP_ID, 1, "double", OP_WRITE)
             );
          }
          #if USE_DIRTY_BIT_OPT 
@@ -1501,7 +1567,7 @@ void EvalEOSForElems(int region, int rep)
          domain.p_compHalfStep->dirtybit=0;
          #endif
          op_par_loop(CalcEOSWork, "CalcEOSWork", current_set,
-                     op_arg_dat(domain.p_work, 0, current_map, 1 , "double", OP_WRITE));
+                     op_arg_dat(local_region_i_p_work, -1, OP_ID, 1 , "double", OP_WRITE));
          #if USE_DIRTY_BIT_OPT
          domain.p_work->dirtybit=0;
          #endif
@@ -1510,9 +1576,9 @@ void EvalEOSForElems(int region, int rep)
    }
 
    op_par_loop(CopyTempEOSVarsBack, "CopyTempEOSVarsBack", current_set,
-               op_arg_dat(domain.p_p, 0, current_map, 1, "double", OP_WRITE), op_arg_dat(domain.p_p_new, 0, current_map, 1, "double", OP_READ),
-               op_arg_dat(domain.p_e, 0, current_map, 1, "double", OP_WRITE), op_arg_dat(domain.p_e_new, 0, current_map, 1, "double", OP_READ),
-               op_arg_dat(domain.p_q, 0, current_map, 1, "double", OP_WRITE), op_arg_dat(domain.p_q_new, 0, current_map, 1, "double", OP_READ)
+               op_arg_dat(domain.p_p, 0, current_map, 1, "double", OP_WRITE), op_arg_dat(local_region_i_p_p_new, -1, OP_ID, 1, "double", OP_READ),
+               op_arg_dat(domain.p_e, 0, current_map, 1, "double", OP_WRITE), op_arg_dat(local_region_i_p_e_new, -1, OP_ID, 1, "double", OP_READ),
+               op_arg_dat(domain.p_q, 0, current_map, 1, "double", OP_WRITE), op_arg_dat(local_region_i_p_q_new, -1, OP_ID, 1, "double", OP_READ)
    );
    #if USE_DIRTY_BIT_OPT 
    domain.p_p->dirtybit=0;
@@ -1584,20 +1650,21 @@ void ApplyMaterialPropertiesForElems()
        EvalEOSForElems( r , rep);
    }
    #if USE_DIRTY_BIT_OPT
-   domain.p_e_old->dirtybit=1; //only here
-   domain.p_delvc->dirtybit=1; //only here
-   domain.p_p_old->dirtybit=1; //only here
-   domain.p_q_old->dirtybit=1; //only here
-   domain.p_qq_old->dirtybit=1; //only here
-   domain.p_ql_old->dirtybit=1; //only here
-   domain.p_compHalfStep->dirtybit=1; //only here
-   domain.p_work->dirtybit=1; //only here
+   domain.p_e_old->dirtybit=1; //only here               //DONE
+   domain.p_delvc->dirtybit=1; //only here               //DONE
+   domain.p_p_old->dirtybit=1; //only here               //DONE
+   domain.p_q_old->dirtybit=1; //only here               //DONE
+   domain.p_qq_old->dirtybit=1; //only here              //DONE
+   domain.p_ql_old->dirtybit=1; //only here              //DONE
+   domain.p_compHalfStep->dirtybit=1; //only here        //DONE
+   domain.p_pHalfStep->dirtybit=0;
+   domain.p_work->dirtybit=1; //only here                //DONE
    domain.p_p->dirtybit=1; //global can be copied out
    domain.p_e->dirtybit=1; //global can be copied out
    domain.p_q->dirtybit=1; //global can be copied out
-   domain.p_e_new->dirtybit=1;      //only here
-   domain.p_q_new->dirtybit=1;      //only here
-   domain.p_p_new->dirtybit=1;      //only here
+   domain.p_e_new->dirtybit=1;      //only here          //DONE
+   domain.p_q_new->dirtybit=1;      //only here          //DONE
+   domain.p_p_new->dirtybit=1;      //only here          //DONE
    domain.p_bvc->dirtybit=1;        //only here
    domain.p_pbvc->dirtybit=1;       //only here
    #endif
