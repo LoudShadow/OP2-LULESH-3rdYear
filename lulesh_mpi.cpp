@@ -167,7 +167,7 @@ Additional BSD Notice
 #include "lulesh-viz.h"
 // #include "lulesh-visit.cc"
 
-#define USE_DIRTY_BIT_OPT 0
+#define USE_DIRTY_BIT_OPT 1
 
 // #include "const.h"
 int myRank;
@@ -1275,9 +1275,10 @@ void CalcPressureForElemsHalfstep(int region)
                op_arg_dat(domain.p_bvc, 0, current_map, 1, "double", OP_WRITE),
                op_arg_dat(domain.p_compHalfStep, 0, current_map, 1, "double", OP_READ),
                op_arg_dat(domain.p_pbvc, 0, current_map, 1, "double", OP_WRITE));
+   #if USE_DIRTY_BIT_OPT
    domain.p_bvc->dirtybit=0;
    domain.p_pbvc->dirtybit=0;
-
+   #endif
 
    //NOTE changed p_pHalfStep to write review
    op_par_loop(CalcPHalfstep, "CalcPHalfstep", current_set,
@@ -1286,7 +1287,10 @@ void CalcPressureForElemsHalfstep(int region)
                op_arg_dat(domain.p_e_new, 0, current_map, 1, "double", OP_READ),
                op_arg_dat(domain.p_vnewc, 0, current_map, 1, "double", OP_READ)
                );
+   #if USE_DIRTY_BIT_OPT
    domain.p_pHalfStep->dirtybit=0;
+   #endif
+
 }
 
 static inline
@@ -1417,7 +1421,9 @@ void CalcSoundSpeedForElems(int region)
                op_arg_dat(domain.p_p_new, 0, current_map, 1, "double", OP_READ),
                op_arg_dat(domain.p_ss, 0, current_map, 1, "double", OP_WRITE)
                );
+   #if USE_DIRTY_BIT_OPT
    domain.p_ss->dirtybit=0;
+   #endif
 }
 
 /******************************************/
@@ -1591,6 +1597,8 @@ void ApplyMaterialPropertiesForElems()
    domain.p_qq_old->dirtybit=1; //only here
    domain.p_ql_old->dirtybit=1; //only here
    domain.p_compHalfStep->dirtybit=1; //only here
+   domain.p_pHalfStep->dirtybit=1;
+   domain.p_compression->dirtybit=1;
    domain.p_work->dirtybit=1; //only here
    domain.p_p->dirtybit=1; //global can be copied out
    domain.p_e->dirtybit=1; //global can be copied out
@@ -1600,6 +1608,7 @@ void ApplyMaterialPropertiesForElems()
    domain.p_p_new->dirtybit=1;      //only here
    domain.p_bvc->dirtybit=1;        //only here
    domain.p_pbvc->dirtybit=1;       //only here
+   domain.p_ss->dirtybit=1;
    #endif
 
    //  Release(&vnewc) ;
