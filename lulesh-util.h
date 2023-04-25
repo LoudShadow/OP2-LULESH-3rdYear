@@ -13,6 +13,10 @@
 #define Hide_Time 0
 #define Show_Time 1
 
+#define Visualization_None 0
+#define Visualization_All 1
+#define Visualization_End 2
+
 /* Helper function for converting strings to ints, with error checking */
 template<typename IntT>
 int StrToInt(const char *token, IntT *retVal)
@@ -233,8 +237,13 @@ void ParseCommandLineOptions(int argc, char *argv[],
          }
          /* -v */
          else if (strcmp(argv[i], "-v") == 0) {
-            #if VIZ_MESH            
-            opts->viz = 1;
+            #if VIZ_MESH
+            if ( strcmp(argv[i+1], "all") == 0 ){
+               opts->partition = Visualization_All;
+            } 
+            if ( strcmp(argv[i+1], "end") == 0 ){
+               opts->partition = Visualization_End;
+            }                 
             #else
             ParseError("Use of -v requires compiling with -DVIZ_MESH\n", myRank);
             #endif
