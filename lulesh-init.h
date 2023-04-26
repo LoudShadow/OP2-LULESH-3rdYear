@@ -1,6 +1,8 @@
 
 #include <op_seq.h>
+#if USE_MPI
 #include <mpi.h>
+#endif
 
 #include <math.h>
 #include <stdlib.h>
@@ -250,7 +252,6 @@ struct Domain{
    op_dat p_ql_old;
 
    op_dat p_e;
-   op_dat p_e_old;
    op_dat p_e_new;
    op_dat p_elemMass;
    op_dat p_elemBC;
@@ -273,14 +274,10 @@ struct Domain{
    op_dat p_delv_xi ;    /* velocity gradient -- temporary */
    op_dat p_delv_eta ;
    op_dat p_delv_zeta ;
-   op_dat p_delvc ;
 
    op_dat p_delx_xi ;    /* coordinate gradient -- temporary */
    op_dat p_delx_eta ;
    op_dat p_delx_zeta ;
-
-   op_dat p_pHalfStep;
-   op_dat p_pbvc;
 
    op_dat p_arealg;
    op_dat p_ss;
@@ -305,46 +302,12 @@ struct Domain{
    op_dat p_dyy;
    op_dat p_dzz;
 
-
-   op_dat p_compression;
-   op_dat p_compHalfStep;
-
-   op_dat p_work;
-   op_dat p_bvc;
-
    op_dat p_t_symmX;
    op_dat p_t_symmY;
    op_dat p_t_symmZ;
 
 };
 op_dat p_loc;
-
-
-void writeFileADHFJ(int myRank,int m_numNodes,double *x,double *y, double *z, char *file ){
-   int fileLength = strlen(file);
-   int numLength=1;
-
-   if (myRank<=0){
-      numLength=1;
-   }else{
-      numLength=(int)(ceil(  log10(myRank+1)  ));
-   }
-
-   char *newName = (char*)malloc( (numLength+fileLength+2)*sizeof(char) );
-   strcpy(newName, file);
-   sprintf(&newName[fileLength],"%d",myRank);
-   newName[fileLength+numLength] ='\0';
-
-   printf(newName);
-   FILE* ptr = fopen(newName,"w");
-   for (int i = 0; i < m_numNodes; i++)
-   {
-      /* code */
-      fprintf(ptr,"%d, %.6f, %.6f, %.6f\n",myRank,x[i],y[i],z[i]);
-   }
-   fclose(ptr);
-   free(newName);
-}
 
 // ===================================================
 // Allocate all standard Nodes
@@ -534,8 +497,8 @@ void Distribute_sub_mapping(int myRank,int* regionSize,int **regions,int **local
 }
 
 static inline 
-int Convert_to_singular(int numReg,int** regions,int* regElemSize, int to_rank, int comm_size,int g_numElem,int tag,int **localValues){
-   printf("HERE 1.2.2\n");
+int Convert_regions_to_specified_rank(int numReg,int** regions,int* regElemSize, int to_rank, int comm_size,int g_numElem,int tag,int **localValues){
+   #if USE_MPI
    int *localRegionSize =(int*)calloc(numReg,sizeof(int));
    int *localValues_Local=(int*)malloc(sizeof(int)*g_numElem);
 
@@ -546,7 +509,6 @@ int Convert_to_singular(int numReg,int** regions,int* regElemSize, int to_rank, 
    }
    int end=start+compute_local_size(g_numElem,comm_size,to_rank);
 
-   printf("HERE 1.2.3\n");
    int index=0;
    int totalSize=0;
    for(int r=0; r<numReg;r++){
@@ -559,17 +521,18 @@ int Convert_to_singular(int numReg,int** regions,int* regElemSize, int to_rank, 
       }
    }
    localValues[0]=localValues_Local;
-   printf("SENDING %d size: %d to Rank: %d : %d %d\n",tag,numReg,to_rank,localRegionSize[0],localRegionSize[1]);
    MPI_Send(localRegionSize,numReg,MPI_INT,to_rank,tag,MPI_COMM_WORLD);
-   printf("SENT TOTAL_SIZE: %d\n",totalSize);
-   printf("localRegionSizes %d %d\n",localRegionSize[0],localRegionSize[1]);
    free(localRegionSize);
    localRegionSize=NULL;
    return totalSize;
+   #endif
+   printf("MPI Required for Convert_regions_to_specified_rank\n");
+   return 0;
 }
 
 static inline 
 void map_and_send(int* the_map, int* values,int length,int rank,int tag){
+   #if USE_MPI
    int *mapped_values=(int*)malloc(sizeof(int)*length);
 
    for (int i = 0; i < length; i++)
@@ -579,32 +542,13 @@ void map_and_send(int* the_map, int* values,int length,int rank,int tag){
    MPI_Send(mapped_values,length,MPI_INT,rank,tag,MPI_COMM_WORLD);
    free(mapped_values);
    mapped_values=NULL;
+   #endif
 }
 
 static inline
 void distrbute_Region_Information_seq(int myRank,int comm_size,int g_numElem){
-   MPI_Barrier(MPI_COMM_WORLD);
 
-   if (myRank==0){
-      for (int j = 0; j < m_numReg; j++)
-      {
-         printf("START============================\n");
-         for (int i = 0; i < g_m_regElemSize[j]; i++)
-         {
-            printf("%d\n",g_m_regElemlist[j][i]);
-         }
-         printf("END============================\n");
-
-      }
-   }
-   MPI_Barrier(MPI_COMM_WORLD);
-   printf("TOGETHER ALLL\n");
-   MPI_Barrier(MPI_COMM_WORLD);
-   
-   
-
-
-
+   #if USE_MPI
    int total_local_size;
    if (myRank==0){
       int start=0;
@@ -628,7 +572,7 @@ void distrbute_Region_Information_seq(int myRank,int comm_size,int g_numElem){
       for (int rank=1; rank<comm_size;rank++){
          int *tmp;
          int **localValues= &tmp;
-         int size=Convert_to_singular(m_numReg,g_m_regElemlist,g_m_regElemSize,rank,comm_size,g_numElem,0,localValues);
+         int size=Convert_regions_to_specified_rank(m_numReg,g_m_regElemlist,g_m_regElemSize,rank,comm_size,g_numElem,0,localValues);
          MPI_Send(*localValues,size,MPI_INT,rank,1,MPI_COMM_WORLD);
          map_and_send(g_lxim,*localValues,size,rank,2);
          map_and_send(g_lxip,*localValues,size,rank,3);
@@ -657,11 +601,6 @@ void distrbute_Region_Information_seq(int myRank,int comm_size,int g_numElem){
    m_region_i_to_lzetap=(int*)malloc(sizeof(int)*local_total_region_size);
    if (myRank!=0){
       MPI_Recv(m_regElemlist_2,local_total_region_size,MPI_INT,0,1,MPI_COMM_WORLD,NULL);
-      for (int i = 0; i < local_total_region_size; i++)
-      {
-         printf("OUT:%d %d\n",myRank,i,m_regElemlist_2[i]);
-      }
-      
       MPI_Recv(m_region_i_to_lxim,local_total_region_size,MPI_INT,0,2,MPI_COMM_WORLD,NULL);
       MPI_Recv(m_region_i_to_lxip,local_total_region_size,MPI_INT,0,3,MPI_COMM_WORLD,NULL);
       MPI_Recv(m_region_i_to_letam,local_total_region_size,MPI_INT,0,4,MPI_COMM_WORLD,NULL);
@@ -669,7 +608,6 @@ void distrbute_Region_Information_seq(int myRank,int comm_size,int g_numElem){
       MPI_Recv(m_region_i_to_lzetam,local_total_region_size,MPI_INT,0,6,MPI_COMM_WORLD,NULL);
       MPI_Recv(m_region_i_to_lzetap,local_total_region_size,MPI_INT,0,7,MPI_COMM_WORLD,NULL);
    }else{
-      printf("HERE 1.4.6\n");
       for (int i = 0; i < local_total_region_size; i++){m_region_i_to_lxim[i]=g_lxim[m_regElemlist_2[i]];}
       for (int i = 0; i < local_total_region_size; i++){m_region_i_to_lxip[i]=g_lxip[m_regElemlist_2[i]];}
       for (int i = 0; i < local_total_region_size; i++){m_region_i_to_letam[i]=g_letam[m_regElemlist_2[i]];}
@@ -678,10 +616,7 @@ void distrbute_Region_Information_seq(int myRank,int comm_size,int g_numElem){
       for (int i = 0; i < local_total_region_size; i++){m_region_i_to_lzetap[i]=g_lzetap[m_regElemlist_2[i]];}
 
    }
-   printf("%d REACHED BARRIER %p\n",myRank,MPI_COMM_WORLD);
-   MPI_Barrier(MPI_COMM_WORLD);
-   printf("%d PASSED BARRIER\n",myRank);
-
+   #endif
 }
 
 static inline
@@ -798,6 +733,7 @@ Domain initOp2Vars(int myRank,int m_numElem,int m_numNode){
    // temp_vols = op_decl_set(m_numElem*8, "tempVols");
 
    domain.p_nodelist = op_decl_map(domain.elems, domain.nodes, 8, nodelist, "nodelist");
+   free(nodelist);
    
    domain.p_lxim = op_decl_map(domain.elems, domain.elems, 1, lxim, "lxim");
    domain.p_lxip = op_decl_map(domain.elems, domain.elems, 1, lxip, "lxip");
@@ -805,6 +741,12 @@ Domain initOp2Vars(int myRank,int m_numElem,int m_numNode){
    domain.p_letap = op_decl_map(domain.elems, domain.elems, 1, letap, "letap");
    domain.p_lzetam = op_decl_map(domain.elems, domain.elems, 1, lzetam, "lzetam");
    domain.p_lzetap = op_decl_map(domain.elems, domain.elems, 1, lzetap, "lzetap");
+   free(lxim);
+   free(lxip);
+   free(letam);
+   free(letap);
+   free(lzetam);
+   free(lzetap);
 
    domain.region_i = (op_set*)malloc(m_numReg* sizeof(op_set));
    domain.region_i_to_elems = (op_map*)malloc(m_numReg* sizeof(op_map));
@@ -837,13 +779,7 @@ Domain initOp2Vars(int myRank,int m_numElem,int m_numNode){
    char regionName[20];
    char mapName[20];
    int offset=0;
-   printf("STARTING maping\n");
-   printf("Sizes at on rank: %d with sizes:",myRank);
    for (int i = 0; i < m_numReg; i++){
-      printf(" %d ",m_regElemSize[i]);
-      // if (m_regElemSize[i]==0){
-      //    continue;
-      // }
 
       sprintf(regionName,"region_%d",i);
       domain.region_i[i] = op_decl_set(m_regElemSize[i], regionName);
@@ -864,7 +800,6 @@ Domain initOp2Vars(int myRank,int m_numElem,int m_numNode){
       sprintf(mapName,"region_%d_to_lzetap",i);
       domain.region_i_to_lzetap[i] = op_decl_map(domain.region_i[i],domain.elems,1,&(m_region_i_to_lzetap[offset]),mapName);
 
-      printf("HERE\n");
       sprintf(mapName,"region_%d_p_e_old",i);
       domain.region_i_p_e_old[i] = op_decl_dat(domain.region_i[i],1,"double",&(e_old[offset]),mapName);
       sprintf(mapName,"region_%d_P_delvc",i);
@@ -878,20 +813,15 @@ Domain initOp2Vars(int myRank,int m_numElem,int m_numNode){
       sprintf(mapName,"region_%d_p_ql_old",i);
       domain.region_i_p_ql_old[i] = op_decl_dat(domain.region_i[i],1,"double",&(ql_old[offset]),mapName);
 
-      printf("HERE 1\n");
       sprintf(mapName,"region_%d_p_compH",i);
       domain.region_i_p_compHalfStep[i] = op_decl_dat(domain.region_i[i],1,"double",&(compHalfStep[offset]),mapName);
-      printf("HERE 2\n");
       sprintf(mapName,"region_%d_p_pHalf",i);
       domain.region_i_p_pHalfStep[i] = op_decl_dat(domain.region_i[i],1,"double",&(pHalfStep[offset]),mapName);
-      printf("HERE 3\n");
       sprintf(mapName,"region_%d_p_comp",i);
       domain.region_i_p_compression[i] = op_decl_dat(domain.region_i[i],1,"double",&(compression[offset]),mapName);
-      printf("HERE 4\n");
       sprintf(mapName,"region_%d_p_work",i);
       domain.region_i_p_work[i] = op_decl_dat(domain.region_i[i],1,"double",&(work[offset]),mapName);
 
-      printf("HERE 2\n");
       sprintf(mapName,"region_%d_p_e_new",i);
       domain.region_i_p_e_new[i] = op_decl_dat(domain.region_i[i],1,"double",&(e_new[offset]),mapName);
       sprintf(mapName,"region_%d_p_q_new",i);
@@ -905,16 +835,16 @@ Domain initOp2Vars(int myRank,int m_numElem,int m_numNode){
 
       offset+=m_regElemSize[i];
    }
-   printf("\n");
-   printf("ENDING maping\n");
 
-   printf("INIT Done\n");
 
 
    //Node Centred
    domain.p_t_symmX = op_decl_dat(domain.nodes, 1, "int", t_symmX, "t_symmX");
    domain.p_t_symmY = op_decl_dat(domain.nodes, 1, "int", t_symmY, "t_symmY");
    domain.p_t_symmZ = op_decl_dat(domain.nodes, 1, "int", t_symmZ, "t_symmZ");
+   free(t_symmX);
+   free(t_symmY);
+   free(t_symmZ);
 
    domain.p_x =op_decl_dat(domain.nodes, 1, "double", x, "p_x");
    domain.p_y =op_decl_dat(domain.nodes, 1, "double", y, "p_y");
@@ -929,6 +859,19 @@ Domain initOp2Vars(int myRank,int m_numElem,int m_numNode){
    domain.p_fx = op_decl_dat(domain.nodes, 1, "double", m_fx, "p_fx");
    domain.p_fy = op_decl_dat(domain.nodes, 1, "double", m_fy, "p_fy");
    domain.p_fz = op_decl_dat(domain.nodes, 1, "double", m_fz, "p_fz");
+   free(x);
+   free(y);
+   free(z);
+   free(loc);
+   free(xd);
+   free(yd);
+   free(zd);
+   free(xdd);
+   free(ydd);
+   free(zdd);
+   free(m_fx);
+   free(m_fy);
+   free(m_fz);
 
    domain.p_nodalMass = op_decl_dat(domain.nodes, 1, "double", nodalMass, "p_nodalMass");
    //Elem Centred
@@ -942,21 +885,43 @@ Domain initOp2Vars(int myRank,int m_numElem,int m_numNode){
    domain.p_delv = op_decl_dat(domain.elems, 1, "double", delv, "p_delv");
    domain.p_vdov = op_decl_dat(domain.elems, 1, "double", m_vdov, "p_vdov");
    domain.p_arealg = op_decl_dat(domain.elems, 1, "double", arealg, "p_arealg");
+   free(nodalMass);
+   free(e);
+   free(p);
+   free(q);
+   free(ql);
+   free(qq);
+   free(v);
+   free(volo);
+   free(delv);
+   free(m_vdov);
+   free(arealg);
 
    domain.p_dxx = op_decl_dat(domain.elems, 1, "double", dxx, "p_dxx");
    domain.p_dyy = op_decl_dat(domain.elems, 1, "double", dyy, "p_dyy");
    domain.p_dzz = op_decl_dat(domain.elems, 1, "double", dzz, "p_dzz");
+   free(dxx);
+   free(dyy);
+   free(dzz);
    
    domain.p_ss = op_decl_dat(domain.elems, 1, "double", ss, "p_ss");
    domain.p_elemMass = op_decl_dat(domain.elems, 1, "double", elemMass, "p_elemMass");
    domain.p_vnew = op_decl_dat(domain.elems, 1, "double", vnew, "p_vnew");
    domain.p_vnewc = op_decl_dat(domain.elems, 1, "double", vnewc, "p_vnewc");
+   free(ss);
+   free(elemMass);
+   free(vnew);
+   free(vnewc);
 
    //Temporary
    domain.p_sigxx = op_decl_dat(domain.elems, 1, "double", sigxx, "p_sigxx");
    domain.p_sigyy = op_decl_dat(domain.elems, 1, "double", sigyy, "p_sigyy");
    domain.p_sigzz = op_decl_dat(domain.elems, 1, "double", sigzz, "p_sigzz");
    domain.p_determ = op_decl_dat(domain.elems, 1, "double", determ, "p_determ");
+   free(sigxx);
+   free(sigyy);
+   free(sigzz);
+   free(determ);
 
    domain.p_dvdx = op_decl_dat(domain.elems, 8, "double",dvdx, "dvdx");
    domain.p_dvdy = op_decl_dat(domain.elems, 8, "double",dvdy, "dvdy");
@@ -964,39 +929,65 @@ Domain initOp2Vars(int myRank,int m_numElem,int m_numNode){
    domain.p_x8n = op_decl_dat(domain.elems, 8, "double",x8n, "x8n");
    domain.p_y8n = op_decl_dat(domain.elems, 8, "double",y8n, "y8n");
    domain.p_z8n = op_decl_dat(domain.elems, 8, "double",z8n, "z8n");
+   free(dvdx);
+   free(dvdy);
+   free(dvdz);
+   free(x8n);
+   free(y8n);
+   free(z8n);
 
    domain.p_delv_xi = op_decl_dat(domain.elems, 1, "double", delv_xi, "p_delv_xi"); 
    domain.p_delv_eta = op_decl_dat(domain.elems, 1, "double", delv_eta, "p_delv_eta"); 
    domain.p_delv_zeta = op_decl_dat(domain.elems, 1, "double", delv_zeta, "p_delv_zeta"); 
+   free(delv_xi);
+   free(delv_eta);
+   free(delv_zeta);
 
    domain.p_delx_xi = op_decl_dat(domain.elems, 1, "double", delx_xi, "p_delx_xi"); 
    domain.p_delx_eta = op_decl_dat(domain.elems, 1, "double", delx_eta, "p_delx_eta"); 
    domain.p_delx_zeta = op_decl_dat(domain.elems, 1, "double", delx_zeta, "p_delx_zeta"); 
 
    domain.p_elemBC = op_decl_dat(domain.elems, 1, "int", elemBC, "p_elemBC");
+   free(delx_xi);
+   free(delx_eta);
+   free(delx_zeta);
+   free(elemBC);
 
    //EOS temp variables
-   domain.p_e_old = op_decl_dat(domain.elems, 1, "double", e_old, "e_old"); 
-   domain.p_delvc = op_decl_dat(domain.elems, 1, "double", delvc, "delvc");
    domain.p_p_old = op_decl_dat(domain.elems, 1, "double", p_old, "p_old");
    domain.p_q_old = op_decl_dat(domain.elems, 1, "double", q_old, "q_old");
-   domain.p_compression = op_decl_dat(domain.elems, 1, "double", compression, "compression");
-   domain.p_compHalfStep = op_decl_dat(domain.elems, 1, "double", compHalfStep, "compHalfStep");
    domain.p_qq_old = op_decl_dat(domain.elems, 1, "double", qq_old, "qq_old");
    domain.p_ql_old = op_decl_dat(domain.elems, 1, "double", ql_old, "ql_old");
-   domain.p_work = op_decl_dat(domain.elems, 1, "double", work, "work");
    domain.p_p_new = op_decl_dat(domain.elems, 1, "double", p_new, "p_new");
    domain.p_e_new = op_decl_dat(domain.elems, 1, "double", e_new, "e_new");
    domain.p_q_new = op_decl_dat(domain.elems, 1, "double", q_new, "q_new");
-   domain.p_bvc = op_decl_dat(domain.elems, 1, "double", bvc, "bvc"); ;
-   domain.p_pbvc = op_decl_dat(domain.elems, 1, "double", pbvc, "pbvc");
-   domain.p_pHalfStep = op_decl_dat(domain.elems, 1, "double", pHalfStep, "pHalfStep");
+
+   free(m_regElemlist_2);
+   free(m_region_i_to_lxim);
+   free(m_region_i_to_lxip);
+   free(m_region_i_to_letam);
+   free(m_region_i_to_letap);
+   free(m_region_i_to_lzetam);
+   free(m_region_i_to_lzetap);
+   free(e_old);
+   free(delvc);
+   free(p_old);
+   free(q_old);
+   free(qq_old);
+   free(ql_old);
+
+   free(compression);
+   free(compHalfStep);
+   free(work);
+   free(p_new);
+   free(e_new);
+   free(q_new);
+   free(bvc);
+   free(pbvc);
+   free(pHalfStep);
 
    return domain;
 }
-
-
-
 
 static inline
 Real_t CalcElemVolume( const Real_t x0, const Real_t x1,
@@ -1649,8 +1640,6 @@ void initialise(int myRank,
       // x-1 y -1 z -1
    }
 
-   op_printf("Voume at 0: %e, Nodal Mass: %e\n", volo[0], nodalMass[0]);
-
    // deposit initial energy
    // An energy of 3.948746e+7 is correct for a problem with
    // 45 zones along a side - we need to scale it
@@ -1679,7 +1668,6 @@ static inline
 void initialiseSingular(int colLoc,
                int rowLoc, int planeLoc,
                int nx, int tp, int nr, int balance, int cost, Int8_t numRanks){
-   printf("%d %d %d %d %d %d\n",colLoc,rowLoc,planeLoc,nx,tp,nr);
 
    int edgeElems = nx ;
    int edgeNodes = edgeElems+1 ;
@@ -1696,11 +1684,6 @@ void initialiseSingular(int colLoc,
    g_sizeY = nx ;
    g_sizeZ = nx ;
 
-   printf("%d %d %d %d %d\n",g_sizeX,g_sizeY,g_sizeZ,g_numElem,g_numNode);
-
-
-
-   printf("HERE NOW 3.1\n");
    //! Setup Comm Buffer, Should not be necessary in final app
    rowMin = (rowLoc == 0)        ? 0 : 1;
    rowMax = (rowLoc == tp-1)     ? 0 : 1;
@@ -1709,7 +1692,6 @@ void initialiseSingular(int colLoc,
    planeMin = (planeLoc == 0)    ? 0 : 1;
    planeMax = (planeLoc == tp-1) ? 0 : 1;
 
-   printf("HERE NOW 3.1.1\n");
    for(int i=0; i<g_numElem;++i){
       g_p[i] = double(0.0);
       g_e[i] = double(0.0);
@@ -1737,8 +1719,6 @@ void initialiseSingular(int colLoc,
    for (int i=0; i<g_numNode; ++i) {
       g_nodalMass[i] = double(0.0) ;
    }
-
-   printf("HERE NOW 3.2\n");
    //!Build Mesh function !HERE
    int meshEdgeElems = tp * nx;
    // op_printf("Building Mesh with planeloc: %d, col: %d, rowLoc: %d, meshEdge: %d\n", planeLoc, colLoc, rowLoc, meshEdgeElems);
@@ -1769,8 +1749,6 @@ void initialiseSingular(int colLoc,
    // embed hexehedral elements in nodal point lattice 
    int zidx = 0 ;
    nidx = 0 ;
-   printf("HERE NOW 3.3\n");
-
    for (int plane=0; plane<edgeElems; ++plane) {
       for (int row=0; row<edgeElems; ++row) {
          for (int col=0; col<edgeElems; ++col) {
@@ -1793,7 +1771,6 @@ void initialiseSingular(int colLoc,
    }
 
    //! End Build Mesh Function
-   printf("HERE NOW 3.4\n");
 
    //! Start Create Region Sets
    srand(0);
@@ -1809,16 +1786,12 @@ void initialiseSingular(int colLoc,
    // Fill out the regNumList with material numbers, which are always
    // the region index plus one 
    if(m_numReg == 1){
-      printf("HERE NOW 3.4.1\n");
-
       while(nextIndex < g_numElem){
          g_m_regNumList[nextIndex] = 1;
          nextIndex++;
       }
       g_m_regElemSize[0] = 0;
    } else {//If we have more than one region distribute the elements.
-      printf("HERE NOW 3.4.2\n");
-
       int regionNum;
       int regionVar;
       int lastReg = -1;
@@ -1882,9 +1855,6 @@ void initialiseSingular(int colLoc,
    }
    // Convert m_regNumList to region index sets
    // First, count size of each region 
-      printf("HERE NOW 3.4.3\n");
-
-
    for (int i=0 ; i<g_numElem ; ++i) {
       int r = g_m_regNumList[i]-1; // region index == regnum-1
       g_m_regElemSize[r]++;
@@ -1902,14 +1872,8 @@ void initialiseSingular(int colLoc,
       int regndx = g_m_regElemSize[r]++; // Note increment
       g_m_regElemlist[r][regndx] = i;
    }
-   printf("HERE NOW 3.4.4.1 %d\n",g_numElem);
-
-
-
-
 
    //! End Create Region Sets
-   printf("HERE NOW 3.5\n");
 
    //! Setup Symmetry Planes Function !HERE
    for (int i = 0; i<g_numNode;++i){ 
@@ -1940,7 +1904,6 @@ void initialiseSingular(int colLoc,
    }
 
    //! End Setup Symmetry Plnes Function
-   printf("HERE NOW 3.6\n");
 
    //! Setup Elem Connectivity Function
    g_lxim[0] = 0 ;
@@ -1968,7 +1931,6 @@ void initialiseSingular(int colLoc,
       g_lzetap[i-edgeElems*edgeElems] = i ;
    }
    //! End Selem Connectivity Function
-   printf("HERE NOW 3.7\n");
 
    //! Setup Boundary Conditions Function !HERE
    // set up boundary condition information
@@ -2062,7 +2024,6 @@ void initialiseSingular(int colLoc,
     }
    }
    //! End SetupBC Function
-   printf("HERE NOW 3.8\n");
 
    // Setup defaults
 
@@ -2083,17 +2044,11 @@ void initialiseSingular(int colLoc,
    m_time    = double(0.) ;
    m_cycle   = int(0) ;
    
-   printf("HERE NOW 3.9\n");
-
-
    double mytotal =0;
    for (int i = 0; i < edgeNodes*edgeNodes*edgeNodes; i++)
    {
       mytotal+=g_x[i];
    }
-   printf("curstep %e %d\n",mytotal,edgeNodes);
-
-
 
    // initialize field data 
    for (int i=0; i<g_numElem; ++i) {
@@ -2118,10 +2073,6 @@ void initialiseSingular(int colLoc,
          g_nodalMass[idx] += volume / double(8.0) ;
       }
    }
-   printf("HERE NOW 3.10\n");
-
-   op_printf("Voume at 0: %e, Nodal Mass: %e\n", g_volo[0], g_nodalMass[0]);
-   printf("HERE NOW 3.11\n");
 
    // deposit initial energy
    // An energy of 3.948746e+7 is correct for a problem with
@@ -2134,7 +2085,6 @@ void initialiseSingular(int colLoc,
       // of the domain that sits at the origin
       g_e[0] = einit;
    }
-   printf("HERE NOW 3.12\n");
 
    m_deltatime = (double(.5)*cbrt(g_volo[0]))/sqrt(double(2.0)*einit);
 
@@ -2158,7 +2108,7 @@ Domain initialiseALL(struct cmdLineOpts opts,int myRank,Int8_t numRanks){
    int m_numElem =  compute_local_size(g_numElem,(Int8_t)numRanks,myRank);
    int m_numNode =  compute_local_size(g_numNode,(Int8_t)numRanks,myRank);
    m_numReg = opts.numReg;
-   printf("HERE 0.0.1\n");
+
    allocateVars(m_numElem,m_numNode);
    if (opts.creation == Creation_Parallel){
       initialise( myRank,opts.nx, 1, opts.numReg,opts.balance, opts.cost, numRanks);
@@ -2169,8 +2119,9 @@ Domain initialiseALL(struct cmdLineOpts opts,int myRank,Int8_t numRanks){
       }
       distributeGlobalElems(myRank,numRanks,g_numElem,m_numElem,g_numNode,m_numNode);
    }
+   #if USE_MPI
    MPI_Bcast(&m_deltatime,1,MPI_DOUBLE,0,MPI_COMM_WORLD);
+   #endif
    Domain domain= initOp2Vars(myRank,m_numElem,m_numNode);
-   printf("HERE 0.0.3\n");
    return domain;
 }

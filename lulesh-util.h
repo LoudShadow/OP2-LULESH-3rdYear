@@ -85,52 +85,59 @@ int calc_Single_Elem_Offset_to_node(int loc_x,int loc_y,int loc_z,int edgeNodes)
 static void scatter_double_array(double *g_array, double *l_array,
                                  int comm_size, int g_size, int l_size,
                                  int elem_size) {
-  int *sendcnts = (int *)malloc(comm_size * sizeof(int));
-  int *displs = (int *)malloc(comm_size * sizeof(int));
-  int disp = 0;
+   #if USE_MPI
+   int *sendcnts = (int *)malloc(comm_size * sizeof(int));
+   int *displs = (int *)malloc(comm_size * sizeof(int));
+   int disp = 0;
 
-  for (int i = 0; i < comm_size; i++) {
-    sendcnts[i] = elem_size * compute_local_size(g_size, comm_size, i);
-  }
-  for (int i = 0; i < comm_size; i++) {
-    displs[i] = disp;
-    disp = disp + sendcnts[i];
-  }
+   for (int i = 0; i < comm_size; i++) {
+      sendcnts[i] = elem_size * compute_local_size(g_size, comm_size, i);
+   }
+   for (int i = 0; i < comm_size; i++) {
+      displs[i] = disp;
+      disp = disp + sendcnts[i];
+   }
 
-  MPI_Scatterv(g_array, sendcnts, displs, MPI_DOUBLE, l_array,
+   MPI_Scatterv(g_array, sendcnts, displs, MPI_DOUBLE, l_array,
                l_size * elem_size, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
-  free(sendcnts);
-  free(displs);
+   free(sendcnts);
+   free(displs);
+   #endif
 }
 
 static void scatter_int_array(int *g_array, int *l_array, int comm_size,
                               int g_size, int l_size, int elem_size) {
-  int *sendcnts = (int *)malloc(comm_size * sizeof(int));
-  int *displs = (int *)malloc(comm_size * sizeof(int));
-  int disp = 0;
+   #if USE_MPI
+   int *sendcnts = (int *)malloc(comm_size * sizeof(int));
+   int *displs = (int *)malloc(comm_size * sizeof(int));
+   int disp = 0;
 
-  for (int i = 0; i < comm_size; i++) {
-    sendcnts[i] = elem_size * compute_local_size(g_size, comm_size, i);
-  }
-  for (int i = 0; i < comm_size; i++) {
-    displs[i] = disp;
-    disp = disp + sendcnts[i];
-  }
+   for (int i = 0; i < comm_size; i++) {
+      sendcnts[i] = elem_size * compute_local_size(g_size, comm_size, i);
+   }
+   for (int i = 0; i < comm_size; i++) {
+      displs[i] = disp;
+      disp = disp + sendcnts[i];
+   }
 
-  MPI_Scatterv(g_array, sendcnts, displs, MPI_INT, l_array, l_size * elem_size,
+   MPI_Scatterv(g_array, sendcnts, displs, MPI_INT, l_array, l_size * elem_size,
                MPI_INT, 0, MPI_COMM_WORLD);
-  free(sendcnts);
-  sendcnts=NULL;
-  free(displs);
+   free(sendcnts);
+   sendcnts=NULL;
+   free(displs);
+   #endif
 }
 
 static void ParseError(const char *message, int myRank)
 {
    if (myRank == 0) {
+      #if USE_MPI
       printf("%s\n", message);     
       MPI_Abort(MPI_COMM_WORLD, -1);
-
+      #else
+      throw message;
+      #endif
    }
 }
 static void PrintCommandLineOptions(char *execname, int myRank)
@@ -252,7 +259,11 @@ void ParseCommandLineOptions(int argc, char *argv[],
          /* -h */
          else if (strcmp(argv[i], "-h") == 0) {
             PrintCommandLineOptions(argv[0], myRank);
-            MPI_Abort(MPI_COMM_WORLD, 0);
+            #if USE_MPI
+            MPI_Abort(MPI_COMM_WORLD, -1);
+            #else
+            throw "end";
+            #endif
 
          }
          else if(strcmp(argv[i], "OP_NO_REALLOC" ) == 0){
@@ -280,7 +291,7 @@ void ParseCommandLineOptions(int argc, char *argv[],
          }
          
          /* -t partiotioning library <S,PK,PG,PKG,K> */
-         else if(strcmp(argv[i], "-t") == 0) {
+         else if(strcmp(argv[i], "-g") == 0) {
             if (i+1 >= argc) {
                ParseError("Missing letter argumnet to -t\n", myRank);
             }
@@ -317,17 +328,9 @@ void ParseCommandLineOptions(int argc, char *argv[],
          }
 
          /* -t initialiseation method <S,PK,PG,PKG,K> */
-         else if(strcmp(argv[i], "-ti") == 0) {
-            if (i+1 >= argc) {
-               ParseError("Missing letter argumnet to -i\n", myRank);
-            }
-            if ( strcmp(argv[i+1], "S") == 0 ){
-               opts->time = Show_Time;
-            }
-            if ( strcmp(argv[i+1], "H") == 0 ){
-               opts->time = Hide_Time;
-            }
-            i+=2;
+         else if(strcmp(argv[i], "-t") == 0) {
+            opts->time = Show_Time;
+            i+=1;
          }
 
 

@@ -2,7 +2,9 @@
 #include <stdio.h>
 #include <op_seq.h>
 
+#if USE_MPI
 #include <mpi.h>
+#endif
 
 #if VIZ_MESH
 extern "C" {
@@ -26,9 +28,11 @@ int add_udc_mesh( DBfile *db,int g_numNode,int g_numElem,int m_numNode,op_dat p_
    op_fetch_data(p_x,local_Coord_x);
    op_fetch_data(p_y,local_Coord_y);
    op_fetch_data(p_z,local_Coord_z);
+   #if USE_MPI
    MPI_Gather(local_Coord_x,m_numNode,MPI_DOUBLE,coords[0],g_numNode,MPI_DOUBLE,0,MPI_COMM_WORLD);
    MPI_Gather(local_Coord_y,m_numNode,MPI_DOUBLE,coords[1],g_numNode,MPI_DOUBLE,0,MPI_COMM_WORLD);
    MPI_Gather(local_Coord_z,m_numNode,MPI_DOUBLE,coords[2],g_numNode,MPI_DOUBLE,0,MPI_COMM_WORLD);
+   #endif
 
    ok += DBPutUcdmesh(db, "mesh", 3, (char**)&coordnames[0], (double**)coords,
                       g_numNode, g_numElem, "connectivity",
@@ -51,7 +55,9 @@ int add_Zonelist2( DBfile *db,int myRank,int g_numElem,int m_numElem,int * nodeL
    if (myRank==0){
       node_list_silo = (int*) malloc(g_numElem * 8 * sizeof(int));
    }
+   #if USE_MPI
    MPI_Gather(nodeList,m_numElem*8,MPI_INT,node_list_silo,g_numElem*8,MPI_INT,0,MPI_COMM_WORLD);
+   #endif
    if (myRank==0){
       int ok = DBPutZonelist2(db, "connectivity", g_numElem, 3,
                      node_list_silo,g_numElem*8,
@@ -75,7 +81,9 @@ int add_var_1(DBfile *db,int myRank,op_dat var,int flag){
    }
    double *local_var = (double*) malloc(m_length * sizeof(double)); 
    op_fetch_data(var,local_var);
+   #if USE_MPI
    MPI_Gather(local_var,m_length,MPI_DOUBLE,g_var,g_length,MPI_DOUBLE,0,MPI_COMM_WORLD);
+   #endif
    if (myRank==0){
       ok = DBPutUcdvar1(db, name, "mesh", g_var,
                       g_length, NULL, 0, DB_DOUBLE, flag,
@@ -131,19 +139,7 @@ export void writeSiloFile(int myRank, int m_cycle,
    int flags[8]={DB_ZONECENT,DB_ZONECENT,DB_ZONECENT,DB_ZONECENT,
             DB_NODECENT,DB_NODECENT,DB_NODECENT,DB_NODECENT};
    add_variables(db,myRank,8,OP_vars,flags);
-   // ok +=add_var_1(db,myRank,p_e,DB_ZONECENT);
-   // ok +=add_var_1(db,myRank,p_p,DB_ZONECENT);
-   // ok +=add_var_1(db,myRank,p_v,DB_ZONECENT);
-   // ok +=add_var_1(db,myRank,p_q,DB_ZONECENT);
 
-   // ok +=add_var_1(db,myRank,p_xd,DB_NODECENT);
-   // ok +=add_var_1(db,myRank,p_yd,DB_NODECENT);
-   // ok +=add_var_1(db,myRank,p_zd,DB_NODECENT);
-   // ok +=add_var_1(db,myRank,p_speed,DB_NODECENT);
-   //ELEMETNS
-
-
-   printf("OK value:%d\n",ok);
    DBClose(db);
    // free(nodelist_silo);
    #else

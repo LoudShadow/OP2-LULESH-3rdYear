@@ -39,7 +39,6 @@ DIFFERENCES BETWEEN THIS VERSION (2.x) AND EARLIER VERSIONS:
       printf(" -r <numregions> : Number of distinct regions (def: 11)\n");
       printf(" -b <balance>    : Load balance between regions of a domain (def: 1)\n");
       printf(" -c <cost>       : Extra cost of more expensive regions (def: 1)\n");
-      printf(" -f <numfiles>   : Number of files to split viz dump into (def: (np+10)/9)\n");
       printf(" -p              : Print out progress\n");
       printf(" -v              : Output viz file (requires compiling with -DVIZ_MESH\n");
       printf(" -h              : This message\n");
@@ -157,11 +156,12 @@ Additional BSD Notice
 #include <iomanip>
 #include <op_seq.h>
 
+#define USE_MPI 1
 #if USE_MPI
 #include <mpi.h>
 #endif
-
 #include "lulesh.h"
+
 
 #include "lulesh-init.h"
 #include "lulesh-viz.h"
@@ -1241,7 +1241,7 @@ int main(int argc, char *argv[])
 {
    op_init(argc, argv, 1);
    //MPI node defaults
-   int numRanks = 0;
+   int numRanks = 1;
    myRank =0;
 
    #if USE_MPI
@@ -1253,7 +1253,6 @@ int main(int argc, char *argv[])
    opts.its = 9999999; // Iterations
    opts.nx  = 30; //Size
    opts.numReg = 1;
-   opts.numFiles = (int)(numRanks+10)/9;
    opts.showProg = 0;
    opts.quiet = 0;
    opts.viz = 0;
@@ -1304,7 +1303,6 @@ int main(int argc, char *argv[])
    m_numElem =  compute_local_size(g_numElem,(Int8_t)numRanks,myRank);
    m_numNode =  compute_local_size(g_numNode,(Int8_t)numRanks,myRank);
 
-   printf("HERE!!!");
    #if USE_MPI
    MPI_Barrier(MPI_COMM_WORLD);
    #endif
