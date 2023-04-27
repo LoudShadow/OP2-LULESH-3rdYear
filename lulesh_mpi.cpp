@@ -156,6 +156,8 @@ Additional BSD Notice
 #include <iomanip>
 #include <op_seq.h>
 
+#include <sys/resource.h>
+
 #define USE_MPI 1
 #if USE_MPI
 #include <mpi.h>
@@ -1384,8 +1386,18 @@ int main(int argc, char *argv[])
    op_decl_const(1, "double", &m_ssc_low);
 
    char file[] = FILE_NAME_PATH;
- 
+
+   double cpu_t3,cpu_t4,wall_t3,wall_t4;
+   op_timers(&cpu_t3, &wall_t3);
    domain = initialiseALL(opts,myRank,(Int8_t)numRanks);
+   op_timers(&cpu_t4, &wall_t4);
+
+   #if USE_MPI
+   MPI_Barrier(MPI_COMM_WORLD);
+   #endif
+   if (myRank==0){
+      printf("Time for data creation %f\n",wall_t4-wall_t3);
+   }
 
    double * speed=(double *)malloc(m_numNode*sizeof(double));
    op_dat p_speed=op_decl_dat(domain.nodes, 1, "double", speed, "p_speed");
@@ -1413,7 +1425,6 @@ int main(int argc, char *argv[])
          op_partition("KAHIP", "KWAY", domain.nodes, domain.p_nodelist, p_loc);
          break;
    }
-   op_print("\n\n");
    
    // BEGIN timestep to solution */
    double cpu_t1, cpu_t2, wall_t1, wall_t2;
@@ -1465,6 +1476,10 @@ int main(int argc, char *argv[])
    if (opts.time){op_timing_output();}
    
    op_exit(); 
+
+   struct rusage r;
+   getrusage(RUSAGE_SELF, &r);
+   printf("rank %d ,MAX RSS: %ld\n",myRank, r.ru_maxrss);
 
    return 0 ;
 }
