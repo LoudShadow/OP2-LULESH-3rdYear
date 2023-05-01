@@ -391,8 +391,7 @@ void IntegrateStressForElems()
 //      fz_elem = Allocate<double>(numElem8) ;
 //   }
   // loop over all elements
-   domain.p_sigxx->dirtybit=1;
-   domain.p_sigxx->dirty_hd=1;
+
    op_par_loop(IntegrateStressForElemsLoop, "IntegrateStressForElemsLoop", domain.elems,
                op_arg_dat(domain.p_x, 0, domain.p_nodelist, 1, "double", OP_READ), op_arg_dat(domain.p_x, 1, domain.p_nodelist, 1, "double", OP_READ), op_arg_dat(domain.p_x, 2, domain.p_nodelist, 1, "double", OP_READ),op_arg_dat(domain.p_x, 3, domain.p_nodelist, 1, "double", OP_READ),op_arg_dat(domain.p_x, 4, domain.p_nodelist, 1, "double", OP_READ),op_arg_dat(domain.p_x, 5, domain.p_nodelist, 1, "double", OP_READ),op_arg_dat(domain.p_x, 6, domain.p_nodelist, 1, "double", OP_READ),op_arg_dat(domain.p_x, 7, domain.p_nodelist, 1, "double", OP_READ),
                op_arg_dat(domain.p_y, 0, domain.p_nodelist, 1, "double", OP_READ), op_arg_dat(domain.p_y, 1, domain.p_nodelist, 1, "double", OP_READ), op_arg_dat(domain.p_y, 2, domain.p_nodelist, 1, "double", OP_READ),op_arg_dat(domain.p_y, 3, domain.p_nodelist, 1, "double", OP_READ),op_arg_dat(domain.p_y, 4, domain.p_nodelist, 1, "double", OP_READ),op_arg_dat(domain.p_y, 5, domain.p_nodelist, 1, "double", OP_READ),op_arg_dat(domain.p_y, 6, domain.p_nodelist, 1, "double", OP_READ),op_arg_dat(domain.p_y, 7, domain.p_nodelist, 1, "double", OP_READ),
@@ -405,8 +404,6 @@ void IntegrateStressForElems()
                op_arg_dat(domain.p_sigyy, -1, OP_ID, 1, "double", OP_READ),
                op_arg_dat(domain.p_sigzz, -1, OP_ID, 1, "double", OP_READ)
                );
-   domain.p_sigxx->dirtybit=1;
-   domain.p_sigxx->dirty_hd=1;
 }
 
 /******************************************/
@@ -961,21 +958,20 @@ void EvalEOSForElems(int region, int rep)
       /* Check for v > eosvmax or v < eosvmin */
          if ( eosvmin != double(0.) ) {
             op_par_loop(CheckEOSLowerBound, "CheckEOSLowerBound", current_set,
-                        op_arg_dat(domain.p_vnewc, 0, current_map, 1, "double", OP_READ),
-                        op_arg_dat(local_region_i_p_compHalfStep, -1, OP_ID, 1, "double", OP_WRITE),
-                        op_arg_dat(local_region_i_p_compression, -1, OP_ID, 1, "double", OP_READ)
+                        op_arg_dat(domain.p_vnewc, 0, current_map, 1, "double", OP_RW),
+                        op_arg_dat(local_region_i_p_compHalfStep, -1, OP_ID, 1, "double", OP_RW),
+                        op_arg_dat(local_region_i_p_compression, -1, OP_ID, 1, "double", OP_RW)
             );
          }
 
          if ( eosvmax != double(0.) ) {
             op_par_loop(CheckEOSUpperBound, "CheckEOSUpperBound", current_set,
                         op_arg_dat(domain.p_vnewc, 0, current_map, 1, "double", OP_READ),
-                        op_arg_dat(local_region_i_p_compHalfStep, -1, OP_ID, 1, "double", OP_WRITE),
-                        op_arg_dat(local_region_i_p_compression, -1, OP_ID, 1, "double", OP_WRITE),
-                        op_arg_dat(local_region_i_p_p_old, -1, OP_ID, 1, "double", OP_WRITE)
+                        op_arg_dat(local_region_i_p_compHalfStep, -1, OP_ID, 1, "double", OP_RW),
+                        op_arg_dat(local_region_i_p_compression, -1, OP_ID, 1, "double", OP_RW),
+                        op_arg_dat(local_region_i_p_p_old, -1, OP_ID, 1, "double", OP_RW)
             );
          }
-
          op_par_loop(CalcEOSWork, "CalcEOSWork", current_set,
                      op_arg_dat(local_region_i_p_work, -1, OP_ID, 1 , "double", OP_WRITE));
       CalcEnergyForElems(region);
